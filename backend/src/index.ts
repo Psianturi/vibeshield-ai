@@ -18,7 +18,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/vibe', vibeRoutes);
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🛡️  VibeGuard AI Backend running on port ${PORT}`);
 });
 

@@ -7,14 +7,25 @@ const VIBEGUARD_VAULT_ABI = [
 ];
 
 export class BlockchainService {
-  private provider: ethers.JsonRpcProvider;
-  private wallet: ethers.Wallet;
+  private provider?: ethers.JsonRpcProvider;
+  private wallet?: ethers.Wallet;
   private vaultAddress: string;
+  private rpcUrl: string;
+  private privateKey: string;
 
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
-    this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY || '', this.provider);
+    this.rpcUrl = process.env.BSC_RPC_URL || '';
+    this.privateKey = process.env.PRIVATE_KEY || '';
     this.vaultAddress = process.env.VIBEGUARD_VAULT_ADDRESS || '';
+  }
+
+  private getWallet(): ethers.Wallet {
+    if (!this.rpcUrl) throw new Error('Missing BSC_RPC_URL');
+    if (!this.privateKey) throw new Error('Missing PRIVATE_KEY');
+
+    if (!this.provider) this.provider = new ethers.JsonRpcProvider(this.rpcUrl);
+    if (!this.wallet) this.wallet = new ethers.Wallet(this.privateKey, this.provider);
+    return this.wallet;
   }
 
   async emergencySwap(userAddress: string, tokenAddress: string, amount: string): Promise<SwapResult> {
@@ -23,8 +34,10 @@ export class BlockchainService {
         return { success: false, error: 'Missing VIBEGUARD_VAULT_ADDRESS' };
       }
 
-      const vault = new ethers.Contract(this.vaultAddress, VIBEGUARD_VAULT_ABI, this.wallet);
-      const isGuardian: boolean = await vault.guardians(this.wallet.address);
+      const wallet = this.getWallet();
+
+      const vault = new ethers.Contract(this.vaultAddress, VIBEGUARD_VAULT_ABI, wallet);
+      const isGuardian: boolean = await vault.guardians(wallet.address);
       if (!isGuardian) {
         return { success: false, error: 'Backend wallet is not a vault guardian' };
       }
