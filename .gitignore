@@ -1,0 +1,36 @@
+# Backend
+backend/node_modules/
+backend/dist/
+backend/.env
+
+# Contracts
+contracts/node_modules/
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+contracts/.env
+
+# General secrets
+.env
+.env.*
+!.env.example
+
+# Frontend
+frontend/vibeguard_app/.dart_tool/
+frontend/vibeguard_app/.flutter-plugins
+frontend/vibeguard_app/.flutter-plugins-dependencies
+frontend/vibeguard_app/.packages
+frontend/vibeguard_app/build/
+frontend/vibeguard_app/.flutter-plugins-dependencies
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,36 @@
+name: vibeguard_app
+description: "VibeGuard AI - Crypto Portfolio Guardian"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  flutter_riverpod: ^2.4.9
+  
+  # UI
+  cupertino_icons: ^1.0.2
+  fl_chart: ^0.65.0
+  google_fonts: ^6.1.0
+  
+  # Network
+  dio: ^5.4.0
+  
+  # Web3
+  web3dart: ^2.7.1
+  
+  # Utils
+  intl: ^0.18.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
