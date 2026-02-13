@@ -52,27 +52,58 @@ Check sentiment and risk analysis for a token.
     "riskScore": 25,
     "shouldExit": false,
     "reason": "Sentiment is positive, no immediate risk",
-    "aiModel": "gpt-4o-mini"
+    "aiModel": "<kalibr-model-id>"
   }
 }
 ```
 
 ### POST /api/vibe/execute-swap
-Execute emergency swap to stablecoin.
+Execute a non-custodial emergency swap via the on-chain vault.
+
+This endpoint returns a **transaction hash** (`txHash`) when the on-chain call succeeds.
 
 **Request:**
 ```json
 {
+  "userAddress": "0xYourUserWallet",
   "tokenAddress": "0x...",
   "amount": "100"
 }
 ```
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "txHash": "0x..."
+}
+```
+
+**Response (error):**
+```json
+{
+  "success": false,
+  "error": "Missing PRIVATE_KEY"
+}
+```
+
+## Subscriptions / Monitor
+- `GET /api/vibe/subscriptions`
+- `POST /api/vibe/subscribe`
+- `POST /api/vibe/run-once`
 
 ## Deployment (Railway)
 
 1. Connect GitHub repo to Railway
 2. Add environment variables in Railway dashboard
 3. Deploy automatically on push
+
+Minimum variables for on-chain execution:
+- `BSC_RPC_URL`
+- `PRIVATE_KEY` (guardian key)
+- `VIBEGUARD_VAULT_ADDRESS`
+
+If you only want the API/healthcheck up, you can leave swap vars unset; `/health` will still work.
 
 ## Tech Stack
 - Node.js + TypeScript

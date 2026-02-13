@@ -10,8 +10,8 @@ export class KalibrService {
 
   constructor() {
     this.apiKey = process.env.KALIBR_API_KEY || '';
-    this.modelHigh = process.env.KALIBR_MODEL_HIGH || 'gpt-4o';
-    this.modelLow = process.env.KALIBR_MODEL_LOW || 'gpt-4o-mini';
+    this.modelHigh = process.env.KALIBR_MODEL_HIGH || 'gemini-1.5-pro';
+    this.modelLow = process.env.KALIBR_MODEL_LOW || 'gemini-2.0-flash';
     this.sentimentBadThreshold = Number(process.env.SENTIMENT_BAD_THRESHOLD ?? 30);
   }
 
