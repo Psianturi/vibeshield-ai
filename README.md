@@ -4,7 +4,7 @@
 
 AI-powered crypto portfolio guardian that monitors social sentiment and executes emergency swaps before crashes happen.
 
-## 🏆 Hackathon: Good Vibes Only (BNB Chain)
+## Good Vibes Only (BNB Chain)
 
 ### Tech Stack
 - **Backend:** Node.js + TypeScript + Express.js (Railway)
@@ -14,7 +14,7 @@ AI-powered crypto portfolio guardian that monitors social sentiment and executes
 - **AI:** Kalibr Systems + GPT-4o
 - **Data:** Cryptoracle + CoinGecko
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Backend
 ```bash
@@ -33,7 +33,7 @@ flutter run -d chrome  # Web
 flutter run            # Mobile
 ```
 
-## 📁 Project Structure
+## Project Structure
 ```
 vibeguard-ai/
 ├── backend/          # Node.js API + AI Agent
@@ -41,7 +41,7 @@ vibeguard-ai/
 └── README.md
 ```
 
-## 🎯 Core Features
+## Core Features
 1. Real-time sentiment monitoring (Cryptoracle)
 2. AI-powered risk analysis (Kalibr + GPT-4o)
 3. Auto-swap to stablecoin on bad vibes

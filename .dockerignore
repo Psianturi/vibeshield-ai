@@ -1,0 +1,24 @@
+.git
+.vscode
+
+# Node
+**/node_modules
+**/npm-debug.log
+
+# Build outputs
+backend/dist
+frontend/**/build
+
+# Flutter/Dart caches
+frontend/**/.dart_tool
+frontend/**/.flutter-plugins
+frontend/**/.flutter-plugins-dependencies
+frontend/**/.packages
+frontend/**/.pub-cache
+
+# Hardhat / Solidity artifacts (if present)
+contracts/**/artifacts
+contracts/**/cache
+
+# Local secrets
+**/.env
