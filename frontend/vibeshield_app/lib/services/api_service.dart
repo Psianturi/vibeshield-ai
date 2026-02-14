@@ -13,9 +13,11 @@ class ApiService {
 
   Future<VibeCheckResult> checkVibe(String token, String tokenId) async {
     try {
+      final cleanToken = token.trim().toUpperCase();
+      final cleanTokenId = tokenId.trim().toLowerCase();
       final response = await _dio.post(
         AppConfig.vibeCheckEndpoint,
-        data: {'token': token, 'tokenId': tokenId},
+        data: {'token': cleanToken, 'tokenId': cleanTokenId},
       );
       return VibeCheckResult.fromJson(response.data);
     } catch (e) {

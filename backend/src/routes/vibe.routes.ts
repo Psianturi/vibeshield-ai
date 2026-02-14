@@ -47,6 +47,10 @@ router.post('/check', async (req, res) => {
       return res.status(429).json({ error: 'Rate limited by upstream provider. Please retry in a moment.' });
     }
 
+    if (msg.toLowerCase().includes('Missing data for tokenid')) {
+      return res.status(400).json({ error: 'Invalid Token or Coin ID. Please pick a valid coin id (e.g. bitcoin, ethereum).' });
+    }
+
     res.status(500).json({ error: msg });
   }
 });

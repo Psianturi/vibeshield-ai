@@ -48,7 +48,7 @@ export class CoinGeckoService {
   }
 
   async getPrice(tokenId: string): Promise<PriceData> {
-    const cleanId = String(tokenId || '').trim();
+    const cleanId = String(tokenId || '').trim().toLowerCase();
     if (!cleanId) throw new Error('CoinGecko: missing tokenId');
 
     const cached = this.getCached(cleanId);
@@ -105,7 +105,7 @@ export class CoinGeckoService {
   }
 
   async getPrices(tokenIds: string[]): Promise<PriceData[]> {
-    const ids = tokenIds.map((s) => String(s || '').trim()).filter(Boolean);
+    const ids = tokenIds.map((s) => String(s || '').trim().toLowerCase()).filter(Boolean);
     if (ids.length === 0) return [];
 
     const now = Date.now();

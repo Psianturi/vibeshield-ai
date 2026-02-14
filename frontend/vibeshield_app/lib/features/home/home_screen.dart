@@ -20,14 +20,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _tokenIdController = TextEditingController(text: 'bitcoin');
   final _tokenAddressController = TextEditingController(text: '');
   final _amountController = TextEditingController(text: '1');
+  final _tokenIdFocusNode = FocusNode();
 
   bool _isSwapping = false;
+
+  static const List<Map<String, String>> _coinGeckoPresets = [
+    {'symbol': 'BTC', 'id': 'bitcoin'},
+    {'symbol': 'BNB', 'id': 'binancecoin'},
+    {'symbol': 'ETH', 'id': 'ethereum'},
+    {'symbol': 'USDT', 'id': 'tether'},
+
+    {'symbol': 'SUI', 'id': 'sui'},
+    {'symbol': 'SOL', 'id': 'solana'},
+    {'symbol': 'XRP', 'id': 'ripple'},
+    {'symbol': 'DOGE', 'id': 'dogecoin'},
+  ];
+
+  Iterable<String> _coinGeckoIdSuggestions(String query) {
+    final q = query.trim().toLowerCase();
+    final symbol = _tokenController.text.trim().toUpperCase();
+
+    if (q.isEmpty) {
+      final bySymbol = _coinGeckoPresets.where((e) => e['symbol'] == symbol).map((e) => e['id']!).toList();
+      if (bySymbol.isNotEmpty) return bySymbol;
+      return _coinGeckoPresets.map((e) => e['id']!);
+    }
+
+    final out = <String>{};
+    for (final item in _coinGeckoPresets) {
+      final s = (item['symbol'] ?? '').toLowerCase();
+      final id = (item['id'] ?? '').toLowerCase();
+      if (s.contains(q) || id.contains(q)) {
+        out.add(item['id']!);
+      }
+    }
+    return out;
+  }
 
   void _applyPreset({required String symbol, required String coinGeckoId}) {
     setState(() {
       _tokenController.text = symbol;
       _tokenIdController.text = coinGeckoId;
     });
+  }
+
+  @override
+  void dispose() {
+    _tokenController.dispose();
+    _tokenIdController.dispose();
+    _tokenAddressController.dispose();
+    _amountController.dispose();
+    _tokenIdFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -146,14 +190,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         labelText: 'Token Symbol',
                         border: OutlineInputBorder(),
                       ),
+                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _tokenIdController,
-                      decoration: const InputDecoration(
-                        labelText: 'CoinGecko ID',
-                        border: OutlineInputBorder(),
-                      ),
+                    RawAutocomplete<String>(
+                      textEditingController: _tokenIdController,
+                      focusNode: _tokenIdFocusNode,
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        return _coinGeckoIdSuggestions(textEditingValue.text);
+                      },
+                      displayStringForOption: (opt) => opt,
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        return TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'CoinGecko ID',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        );
+                      },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        final opts = options.toList(growable: false);
+                        if (opts.isEmpty) return const SizedBox.shrink();
+
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 220, maxWidth: 520),
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: opts.length,
+                                itemBuilder: (context, index) {
+                                  final id = opts[index];
+                                  final preset = _coinGeckoPresets.firstWhere(
+                                    (e) => e['id'] == id,
+                                    orElse: () => const <String, String>{},
+                                  );
+                                  final symbol = preset['symbol'];
+
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(id),
+                                    subtitle: (symbol != null && symbol.isNotEmpty) ? Text(symbol) : null,
+                                    onTap: () => onSelected(id),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
@@ -161,8 +252,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ? null
                           : () {
                               ref.read(vibeNotifierProvider.notifier).checkVibe(
-                                    _tokenController.text,
-                                    _tokenIdController.text,
+                                    _tokenController.text.trim().toUpperCase(),
+                                    _tokenIdController.text.trim().toLowerCase(),
                                   );
                             },
                       child: vibeState.isLoading
@@ -386,15 +477,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    _tokenIdController.dispose();
-    _tokenAddressController.dispose();
-    _amountController.dispose();
-    super.dispose();
   }
 
   String _short(String s) {
