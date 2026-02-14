@@ -9,6 +9,8 @@ class ApiService {
     receiveTimeout: const Duration(seconds: 10),
   ));
 
+  static const String _coinGeckoBaseUrl = 'https://api.coingecko.com/api/v3';
+
   Future<VibeCheckResult> checkVibe(String token, String tokenId) async {
     try {
       final response = await _dio.post(
@@ -56,11 +58,15 @@ class ApiService {
   }
 
   Future<List<PriceData>> getMarketPrices({List<String>? ids}) async {
+    final resolvedIds = (ids == null || ids.isEmpty)
+        ? const ['bitcoin', 'binancecoin', 'ethereum', 'tether']
+        : ids;
+
     try {
       final response = await _dio.get(
         AppConfig.marketPricesEndpoint,
         queryParameters: {
-          if (ids != null && ids.isNotEmpty) 'ids': ids.join(','),
+          'ids': resolvedIds.join(','),
         },
       );
 
@@ -71,7 +77,47 @@ class ApiService {
           .map((e) => PriceData.fromJson(Map<String, dynamic>.from(e)))
           .toList(growable: false);
     } catch (e) {
-      throw Exception('Failed to load market prices: $e');
+
+      return await _getMarketPricesFromCoinGecko(resolvedIds);
     }
+  }
+
+  Future<List<PriceData>> _getMarketPricesFromCoinGecko(List<String> ids) async {
+    final dio = Dio(BaseOptions(
+      baseUrl: _coinGeckoBaseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+    ));
+
+    final response = await dio.get(
+      '/simple/price',
+      queryParameters: {
+        'ids': ids.join(','),
+        'vs_currencies': 'usd',
+        'include_24hr_vol': true,
+        'include_24hr_change': true,
+      },
+    );
+
+    final data = response.data;
+    if (data is! Map) return const <PriceData>[];
+
+    final out = <PriceData>[];
+    for (final id in ids) {
+      final row = data[id];
+      if (row is! Map) continue;
+      final usd = row['usd'];
+      if (usd is! num) continue;
+
+      out.add(
+        PriceData(
+          token: id,
+          price: usd.toDouble(),
+          volume24h: (row['usd_24h_vol'] is num) ? (row['usd_24h_vol'] as num).toDouble() : 0,
+          priceChange24h: (row['usd_24h_change'] is num) ? (row['usd_24h_change'] as num).toDouble() : 0,
+        ),
+      );
+    }
+    return out;
   }
 }
