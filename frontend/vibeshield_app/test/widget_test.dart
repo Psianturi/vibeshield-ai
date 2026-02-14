@@ -9,10 +9,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:vibeshield_app/main.dart';
+import 'package:vibeshield_app/providers/market_prices_provider.dart';
+import 'package:vibeshield_app/models/vibe_models.dart';
+
 
 void main() {
   testWidgets('App boots and shows HomeScreen', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: MyApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          marketPricesProvider.overrideWith(
+            (ref) => Stream.value(const <PriceData>[]),
+          ),
+        ],
+        child: const MyApp(),
+      ),
+    );
 
     expect(find.text('🛡️ VibeShield AI'), findsOneWidget);
   });

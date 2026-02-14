@@ -54,4 +54,24 @@ class ApiService {
       throw Exception('Failed to load tx history: $e');
     }
   }
+
+  Future<List<PriceData>> getMarketPrices({List<String>? ids}) async {
+    try {
+      final response = await _dio.get(
+        AppConfig.marketPricesEndpoint,
+        queryParameters: {
+          if (ids != null && ids.isNotEmpty) 'ids': ids.join(','),
+        },
+      );
+
+      final data = response.data;
+      final items = (data is Map<String, dynamic>) ? (data['items'] as List? ?? []) : [];
+      return items
+          .whereType<Map>()
+          .map((e) => PriceData.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false);
+    } catch (e) {
+      throw Exception('Failed to load market prices: $e');
+    }
+  }
 }

@@ -25,6 +25,8 @@ class AppConfig {
   static const String vibeCheckEndpoint = '/vibe/check';
   static const String executeSwapEndpoint = '/vibe/execute-swap';
 
+  static const String marketPricesEndpoint = '/vibe/prices';
+
   static const String txHistoryEndpoint = '/vibe/tx-history';
   
   static const String rpcUrl = String.fromEnvironment(

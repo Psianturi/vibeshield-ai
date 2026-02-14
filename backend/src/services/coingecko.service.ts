@@ -58,4 +58,49 @@ export class CoinGeckoService {
       throw new Error(msg || 'CoinGecko request failed');
     }
   }
+
+  async getPrices(tokenIds: string[]): Promise<PriceData[]> {
+    const ids = tokenIds.map((s) => String(s || '').trim()).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    try {
+      const params = {
+        ids: ids.join(','),
+        vs_currencies: 'usd',
+        include_24hr_vol: true,
+        include_24hr_change: true
+      };
+
+      let response: any;
+      try {
+        response = await axios.get(`${this.baseUrl}/simple/price`, {
+          params,
+          headers: this.apiKey ? { 'x-cg-pro-api-key': this.apiKey } : {},
+          timeout: 15000
+        });
+      } catch (error: any) {
+        response = await axios.get(`${this.baseUrl}/simple/price`, {
+          params,
+          timeout: 15000
+        });
+      }
+
+      const out: PriceData[] = [];
+      for (const tokenId of ids) {
+        const data = response.data?.[tokenId];
+        if (!data || typeof data.usd !== 'number') continue;
+        out.push({
+          token: tokenId,
+          price: data.usd,
+          volume24h: typeof data.usd_24h_vol === 'number' ? data.usd_24h_vol : 0,
+          priceChange24h: typeof data.usd_24h_change === 'number' ? data.usd_24h_change : 0
+        });
+      }
+      return out;
+    } catch (error) {
+      const msg = this.formatAxiosError(error);
+      console.error('CoinGecko error:', msg);
+      throw new Error(msg || 'CoinGecko request failed');
+    }
+  }
 }

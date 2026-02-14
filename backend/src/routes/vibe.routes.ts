@@ -44,6 +44,20 @@ router.post('/check', async (req, res) => {
   }
 });
 
+router.get('/prices', async (req, res) => {
+  try {
+    const idsRaw = String(req.query.ids || '').trim();
+    const tokenIds = idsRaw
+      ? idsRaw.split(',').map((s) => s.trim()).filter(Boolean)
+      : ['bitcoin', 'binancecoin', 'ethereum', 'tether'];
+
+    const items = await coingecko.getPrices(tokenIds);
+    res.json({ ok: true, items, updatedAt: Date.now() });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 router.post('/execute-swap', async (req, res) => {
   try {
     const { userAddress, tokenAddress, amount } = req.body;
