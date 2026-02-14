@@ -20,6 +20,35 @@ AI-powered crypto portfolio guardian that monitors social sentiment and executes
 - Base URL: https://vibeguard-ai-production.up.railway.app
 - Health: https://vibeguard-ai-production.up.railway.app/health
 
+
+## Frontend (Flutter Web) → Vercel (GitHub Actions)
+
+This repo deploys Flutter Web via GitHub Actions (Vercel CLI). Vercel does **not** need Flutter installed.
+
+### 1) Create a Vercel project (one-time)
+- Create a new project in Vercel Dashboard.
+- Keep **Root Directory** empty (we deploy prebuilt static files).
+
+### 2) Add GitHub Actions secrets (one-time)
+In GitHub → **Settings → Secrets and variables → Actions → Secrets**:
+- `VERCEL_TOKEN` (Vercel access token)
+- `VERCEL_PROJECT_NAME` (your Vercel project name/slug)
+- `VERCEL_SCOPE` (optional: team slug/username)
+
+### 3) Set build-time config (recommended)
+In GitHub → **Settings → Secrets and variables → Actions → Variables**:
+- `API_BASE_URL` (example: `https://<your-railway-domain>.up.railway.app`)
+
+Note: `--dart-define` is **build-time** for Flutter Web.
+
+### 4) Deploy
+- Push to `main`.
+- Workflow: `.github/workflows/deploy_flutter_web_vercel.yml`
+
+### CORS note (backend)
+If you lock down CORS, set Railway `CORS_ORIGIN` to include your Vercel domain, e.g.:
+- `CORS_ORIGIN=https://<project>.vercel.app,https://<your-custom-domain>`
+
 ## Quick Start
 
 ### Backend

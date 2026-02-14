@@ -1,0 +1,90 @@
+name: Deploy Flutter Web to Vercel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/vibeshield_app/**"
+      - "vercel.json"
+      - ".github/workflows/deploy_flutter_web_vercel.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-vercel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_PROJECT_NAME: ${{ secrets.VERCEL_PROJECT_NAME }}
+      VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        working-directory: frontend/vibeshield_app
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        working-directory: frontend/vibeshield_app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DART_DEFINES=""
+          if [ -n "${API_BASE_URL:-}" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=API_BASE_URL=$API_BASE_URL"
+          fi
+
+          flutter build web --release $DART_DEFINES
+
+      - name: Add SPA route config
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp vercel.json frontend/vibeshield_app/build/web/vercel.json
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy to Vercel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "Missing GitHub Secret: VERCEL_TOKEN" >&2
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_PROJECT_NAME:-}" ]; then
+            echo "Missing GitHub Secret: VERCEL_PROJECT_NAME" >&2
+            exit 1
+          fi
+
+          SCOPE_ARGS=""
+          if [ -n "${VERCEL_SCOPE:-}" ]; then
+            SCOPE_ARGS="--scope $VERCEL_SCOPE"
+          fi
+
+          vercel deploy \
+            --prod \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            $SCOPE_ARGS \
+            --name "$VERCEL_PROJECT_NAME" \
+            --cwd frontend/vibeshield_app/build/web
