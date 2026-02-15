@@ -34,8 +34,14 @@ export class AgentDemoService {
   private deploymentCache?: AgentDemoDeployment;
 
   constructor() {
-    this.rpcUrl = process.env.EVM_RPC_URL || process.env.BSC_RPC_URL || '';
-    this.privateKey = process.env.PRIVATE_KEY || '';
+    // Allow a dedicated RPC/PK for the agent demo so it can target BSC Testnet
+    // even if the rest of the backend is configured for a different chain.
+    this.rpcUrl =
+      process.env.AGENT_DEMO_RPC_URL ||
+      process.env.EVM_RPC_URL ||
+      process.env.BSC_RPC_URL ||
+      '';
+    this.privateKey = process.env.AGENT_DEMO_PRIVATE_KEY || process.env.PRIVATE_KEY || '';
   }
 
   private getWallet(): ethers.Wallet {
@@ -110,6 +116,33 @@ export class AgentDemoService {
     return { chainId, registry, router, wbnb, musdt, executorFromFile: dep.executor };
   }
 
+  private async assertRpcMatchesDeployment(
+    provider: ethers.Provider,
+    expectedChainId: number | null,
+  ): Promise<void> {
+    if (expectedChainId == null) return;
+    const net = await provider.getNetwork();
+    const actual = Number(net.chainId);
+    if (actual !== expectedChainId) {
+      throw new Error(
+        `RPC network mismatch. Expected chainId ${expectedChainId} but RPC is chainId ${actual}. Set AGENT_DEMO_RPC_URL to a BSC Testnet RPC.`,
+      );
+    }
+  }
+
+  private async assertContractDeployed(
+    provider: ethers.Provider,
+    address: string,
+    label: string,
+  ): Promise<void> {
+    const code = await provider.getCode(address);
+    if (!code || code === '0x') {
+      throw new Error(
+        `${label} contract not found at ${address}. Likely wrong RPC network for this deployment.`,
+      );
+    }
+  }
+
   async getPublicConfig(): Promise<{
     chainId: number | null;
     registry: string;
@@ -141,7 +174,7 @@ export class AgentDemoService {
 
   async executeProtection(userAddress: string, amountWbnb: string): Promise<SwapResult> {
     try {
-      const { registry, router } = this.resolveAddresses();
+      const { chainId, registry, router } = this.resolveAddresses();
 
       if (!ethers.isAddress(userAddress)) {
         return { success: false, error: 'Invalid userAddress' };
@@ -153,6 +186,12 @@ export class AgentDemoService {
       }
 
       const wallet = this.getWallet();
+
+      // Make failures actionable: validate RPC matches the deployment and that
+      // contract bytecode exists at the configured addresses.
+      await this.assertRpcMatchesDeployment(wallet.provider!, chainId);
+      await this.assertContractDeployed(wallet.provider!, registry, 'Registry');
+      await this.assertContractDeployed(wallet.provider!, router, 'Router');
 
       const reg = new ethers.Contract(registry, REGISTRY_ABI, wallet);
       const agent = await reg.getAgent(userAddress);
