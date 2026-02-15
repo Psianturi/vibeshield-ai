@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class SentimentInsightsWidget extends StatelessWidget {
   final Map<String, dynamic> insightsData;
@@ -12,6 +13,14 @@ class SentimentInsightsWidget extends StatelessWidget {
     
     final enhanced = insightsData['enhanced'];
     final vibeScore = insightsData['vibeScore'] ?? 50;
+    final source = insightsData['source'] as String?;
+    final timestamp = insightsData['timestamp'] as int?;
+    final responseTimeMs = insightsData['responseTimeMs'] as int?;
+    
+    final isFallback = source == 'fallback';
+    final updatedTime = timestamp != null 
+        ? DateFormat('HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(timestamp))
+        : null;
     
     if (enhanced == null) {
       return Card(
@@ -51,14 +60,71 @@ class SentimentInsightsWidget extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                // Source indicator
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isFallback 
+                        ? Colors.orange.withValues(alpha: 0.2)
+                        : Colors.green.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isFallback ? Colors.orange : Colors.green,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isFallback ? Icons.warning_amber : Icons.check_circle,
+                        size: 14,
+                        color: isFallback ? Colors.orange : Colors.green,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isFallback ? 'FALLBACK' : 'LIVE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isFallback ? Colors.orange : Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Flexible(child: _buildVibeBadge(vibeScore, scheme)),
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              'Window: ${enhanced['window'] ?? 'Daily'}',
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            Row(
+              children: [
+                Text(
+                  'Window: ${enhanced['window'] ?? 'Daily'}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                if (updatedTime != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '• $updatedTime',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+                if (responseTimeMs != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '(${responseTimeMs}ms)',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 16),
             

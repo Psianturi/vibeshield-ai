@@ -5,10 +5,30 @@ import { BlockchainService } from '../services/blockchain.service';
 import { loadSubscriptions, saveSubscriptions, Subscription } from '../storage/subscriptions';
 import { appendTxHistory } from '../storage/txHistory';
 
-const cryptoracle = new CryptoracleService();
-const coingecko = new CoinGeckoService();
-const kalibr = new KalibrService();
-const blockchain = new BlockchainService();
+let _cryptoracle: CryptoracleService | null = null;
+let _coingecko: CoinGeckoService | null = null;
+let _kalibr: KalibrService | null = null;
+let _blockchain: BlockchainService | null = null;
+
+function getCryptoracle(): CryptoracleService {
+  if (!_cryptoracle) _cryptoracle = new CryptoracleService();
+  return _cryptoracle;
+}
+
+function getCoingecko(): CoinGeckoService {
+  if (!_coingecko) _coingecko = new CoinGeckoService();
+  return _coingecko;
+}
+
+function getKalibr(): KalibrService {
+  if (!_kalibr) _kalibr = new KalibrService();
+  return _kalibr;
+}
+
+function getBlockchain(): BlockchainService {
+  if (!_blockchain) _blockchain = new BlockchainService();
+  return _blockchain;
+}
 
 export async function runMonitorOnce() {
   const subs = loadSubscriptions().filter((s) => s.enabled);
@@ -17,15 +37,15 @@ export async function runMonitorOnce() {
   for (const sub of subs) {
     try {
       const [sentiment, price] = await Promise.all([
-        cryptoracle.getSentiment(sub.tokenSymbol),
-        coingecko.getPrice(sub.tokenId)
+        getCryptoracle().getSentiment(sub.tokenSymbol),
+        getCoingecko().getPrice(sub.tokenId)
       ]);
 
-      const analysis = await kalibr.analyzeRisk(sentiment, price);
+      const analysis = await getKalibr().analyzeRisk(sentiment, price);
 
       let executed: any = null;
       if (analysis.shouldExit && analysis.riskScore >= sub.riskThreshold) {
-        executed = await blockchain.emergencySwap(sub.userAddress, sub.tokenAddress, sub.amount);
+        executed = await getBlockchain().emergencySwap(sub.userAddress, sub.tokenAddress, sub.amount);
         if (executed?.success && executed?.txHash) {
           appendTxHistory({
             userAddress: sub.userAddress,
@@ -35,7 +55,6 @@ export async function runMonitorOnce() {
             source: 'monitor'
           });
         }
-        // Auto-disable after execution (hackathon safety)
         sub.enabled = false;
       }
 

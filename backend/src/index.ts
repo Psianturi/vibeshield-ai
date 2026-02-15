@@ -37,7 +37,7 @@ app.get('/health', (req, res) => {
       },
       cryptoracle: {
         apiKey: Boolean(process.env.CRYPTORACLE_API_KEY),
-        baseUrl: process.env.CRYPTORACLE_BASE_URL || 'https://api.cryptoracle.io/v1'
+        baseUrl: process.env.CRYPTORACLE_BASE_URL || 'https://service.cryptoracle.network'
       },
       coingecko: {
         apiKey: Boolean(process.env.COINGECKO_API_KEY)

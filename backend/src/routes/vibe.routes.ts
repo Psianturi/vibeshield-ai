@@ -7,12 +7,74 @@ import { loadSubscriptions, upsertSubscription } from '../storage/subscriptions'
 import { appendTxHistory, loadTxHistory } from '../storage/txHistory';
 import { runMonitorOnce } from '../monitor/vibeMonitor';
 import { ethers } from 'ethers';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
-const cryptoracle = new CryptoracleService();
-const coingecko = new CoinGeckoService();
-const kalibr = new KalibrService();
-const blockchain = new BlockchainService();
+
+const cryptoracleLimiter = rateLimit({
+  windowMs: Number(process.env.CRYPTORACLE_RATE_LIMIT_WINDOW_MS ?? 60_000),
+  limit: Number(process.env.CRYPTORACLE_RATE_LIMIT_PER_WINDOW ?? 30),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
+function normalizeWindow(raw: any): 'Daily' | '4H' | '1H' | '15M' {
+  const w = String(raw ?? 'Daily').trim();
+  if (w === '15M' || w === '1H' || w === '4H' || w === 'Daily') return w;
+  return 'Daily';
+}
+
+function normalizeSymbol(raw: any): string {
+  const s = String(raw ?? '').trim().toUpperCase();
+  // Basic sanity check to avoid abusive payloads
+  if (!/^[A-Z0-9]{2,15}$/.test(s)) return '';
+  return s;
+}
+
+function normalizeSymbolList(raw: any): string[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: string[] = [];
+  for (const item of list) {
+    const s = normalizeSymbol(item);
+    if (s && !out.includes(s)) out.push(s);
+    if (out.length >= Number(process.env.MULTI_MAX_TOKENS ?? 20)) break;
+  }
+  return out;
+}
+
+// Lazy initialization to ensure dotenv has loaded
+let _cryptoracle: CryptoracleService | null = null;
+let _coingecko: CoinGeckoService | null = null;
+let _kalibr: KalibrService | null = null;
+let _blockchain: BlockchainService | null = null;
+
+function getCryptoracle(): CryptoracleService {
+  if (!_cryptoracle) {
+    _cryptoracle = new CryptoracleService();
+  }
+  return _cryptoracle;
+}
+
+function getCoingecko(): CoinGeckoService {
+  if (!_coingecko) {
+    _coingecko = new CoinGeckoService();
+  }
+  return _coingecko;
+}
+
+function getKalibr(): KalibrService {
+  if (!_kalibr) {
+    _kalibr = new KalibrService();
+  }
+  return _kalibr;
+}
+
+function getBlockchain(): BlockchainService {
+  if (!_blockchain) {
+    _blockchain = new BlockchainService();
+  }
+  return _blockchain;
+}
 
 router.get('/debug/models', async (req, res) => {
   const debugEnabled = String(process.env.DEBUG || '').toLowerCase() === 'true';
@@ -21,7 +83,7 @@ router.get('/debug/models', async (req, res) => {
   }
 
   try {
-    const models = await kalibr.listGeminiGenerateContentModels();
+    const models = await getKalibr().listGeminiGenerateContentModels();
     res.json({ ok: true, count: models.length, models });
   } catch (error: any) {
     res.status(500).json({ ok: false, error: error.message });
@@ -79,16 +141,20 @@ router.get('/token-presets', (req, res) => {
   }
 });
 
-router.post('/check', async (req, res) => {
+router.post('/check', cryptoracleLimiter, async (req, res) => {
   try {
     const { token, tokenId } = req.body;
+    const symbol = normalizeSymbol(token);
+    if (!symbol) {
+      return res.status(400).json({ error: 'Invalid token symbol' });
+    }
 
     const [sentiment, price] = await Promise.all([
-      cryptoracle.getSentiment(token),
-      coingecko.getPrice(tokenId)
+      getCryptoracle().getSentiment(symbol),
+      getCoingecko().getPrice(tokenId)
     ]);
 
-    const analysis = await kalibr.analyzeRisk(sentiment, price);
+    const analysis = await getKalibr().analyzeRisk(sentiment, price);
 
     res.json({ sentiment, price, analysis });
   } catch (error: any) {
@@ -114,7 +180,7 @@ router.get('/prices', async (req, res) => {
       ? idsRaw.split(',').map((s) => s.trim()).filter(Boolean)
       : ['bitcoin', 'binancecoin', 'ethereum', 'tether'];
 
-    const items = await coingecko.getPrices(tokenIds);
+    const items = await getCoingecko().getPrices(tokenIds);
     res.json({ ok: true, items, updatedAt: Date.now() });
   } catch (error: any) {
     res.status(500).json({ ok: false, error: error.message });
@@ -124,7 +190,7 @@ router.get('/prices', async (req, res) => {
 router.post('/execute-swap', async (req, res) => {
   try {
     const { userAddress, tokenAddress, amount } = req.body;
-    const result = await blockchain.emergencySwap(userAddress, tokenAddress, amount);
+    const result = await getBlockchain().emergencySwap(userAddress, tokenAddress, amount);
 
     if (result?.success && result?.txHash && userAddress && tokenAddress) {
       appendTxHistory({
@@ -196,7 +262,7 @@ router.post('/run-once', async (req, res) => {
 
 
 // Get detailed sentiment insights for a single token
-router.post('/insights', async (req, res) => {
+router.post('/insights', cryptoracleLimiter, async (req, res) => {
   try {
     const { token, window = 'Daily' } = req.body;
 
@@ -204,7 +270,14 @@ router.post('/insights', async (req, res) => {
       return res.status(400).json({ error: 'Missing token parameter' });
     }
 
-    const symbol = String(token || '').trim().toUpperCase();
+    const symbol = normalizeSymbol(token);
+    if (!symbol) {
+      return res.status(400).json({ error: 'Invalid token symbol' });
+    }
+    const resolvedWindow = normalizeWindow(window);
+    console.log(`[API] /insights request: ${symbol} (${window})`);
+    const requestStartTime = Date.now();
+
     const symbolToCoinId: Record<string, string> = {
       BTC: 'bitcoin',
       ETH: 'ethereum',
@@ -218,8 +291,8 @@ router.post('/insights', async (req, res) => {
     const coinId = symbolToCoinId[symbol] || String(token || '').trim().toLowerCase();
 
     const [enhanced, price] = await Promise.all([
-      cryptoracle.getEnhancedSentiment(symbol, window),
-      coingecko.getPrice(coinId)
+      getCryptoracle().getEnhancedSentiment(symbol, resolvedWindow),
+      getCoingecko().getPrice(coinId)
     ]);
 
     let vibeScore = 50;
@@ -229,45 +302,56 @@ router.post('/insights', async (req, res) => {
       finalEnhanced = enhanced;
       vibeScore = Math.round((enhanced.sentiment.positive * 100));
     } else {
- 
+      console.warn(`[API] No Cryptoracle data for ${symbol} - using fallback`);
       finalEnhanced = _generateFallbackData(token.toUpperCase());
       vibeScore = Math.round(finalEnhanced.sentiment.positive * 100);
     }
 
+    const elapsed = Date.now() - requestStartTime;
+    const source = enhanced && enhanced.sentiment ? 'cryptoracle' : 'fallback';
+    console.log(`[API] /insights ${symbol} -> ${source} (${elapsed}ms)`);
+
     res.json({ 
       token: symbol,
-      window,
+      window: resolvedWindow,
       enhanced: finalEnhanced, 
       price,
       vibeScore,
-      source: enhanced && enhanced.sentiment ? 'cryptoracle' : 'fallback'
+      source,
+      timestamp: Date.now(),
+      responseTimeMs: elapsed
     });
   } catch (error: any) {
+    console.error(`[API] /insights error:`, error?.message || 'Unknown');
     res.status(500).json({ ok: false, error: error.message });
   }
 });
 
 // Get multi-token sentiment dashboard
-router.post('/multi', async (req, res) => {
+router.post('/multi', cryptoracleLimiter, async (req, res) => {
   try {
     const { tokens, window = 'Daily' } = req.body;
+    const resolvedWindow = normalizeWindow(window);
 
-    const tokenList = tokens && Array.isArray(tokens) 
-      ? tokens 
+    const tokenList = (tokens && Array.isArray(tokens) && tokens.length)
+      ? normalizeSymbolList(tokens)
       : ['BTC', 'BNB', 'ETH', 'SOL', 'XRP', 'DOGE', 'SUI', 'USDT'];
 
-    const results = await cryptoracle.getMultiTokenSentiment(tokenList, window);
+    console.log(`[API] /multi request: ${tokenList.length} tokens`);
+    const requestStartTime = Date.now();
+
+    const results = await getCryptoracle().getMultiTokenSentiment(tokenList, resolvedWindow);
 
     const data: Record<string, any> = {};
     
-    // Generate fallback data if Cryptoracle returns null data
-    const hasValidData = Array.from(results.values()).some(v => v !== null && v?.sentiment);
+    let realDataCount = 0;
+    let fallbackCount = 0;
     
     tokenList.forEach((token) => {
       const result = results.get(token.toUpperCase());
       
       if (result && result.sentiment) {
- 
+        realDataCount++;
         data[token.toUpperCase()] = {
           sentiment: {
             positive: result.sentiment.positive,
@@ -277,20 +361,33 @@ router.post('/multi', async (req, res) => {
           community: result.community,
           signals: result.signals,
           timestamp: result.timestamp,
+          isFallback: false,
         };
       } else {
+        fallbackCount++;
         data[token.toUpperCase()] = _generateFallbackData(token.toUpperCase());
       }
     });
 
+    const elapsed = Date.now() - requestStartTime;
+    const source = realDataCount > 0 ? 'cryptoracle' : 'fallback';
+    console.log(`[API] /multi -> ${realDataCount} real, ${fallbackCount} fallback (${elapsed}ms)`);
+
     res.json({ 
       ok: true, 
-      window,
+      window: resolvedWindow,
       tokens: data,
       updatedAt: Date.now(),
-      source: hasValidData ? 'cryptoracle' : 'fallback'
+      source,
+      stats: {
+        total: tokenList.length,
+        realData: realDataCount,
+        fallbackData: fallbackCount,
+        responseTimeMs: elapsed
+      }
     });
   } catch (error: any) {
+    console.error(`[API] /multi error:`, error?.message || 'Unknown');
     res.status(500).json({ ok: false, error: error.message });
   }
 });

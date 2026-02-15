@@ -56,22 +56,34 @@ class MultiTokenState {
   final bool isLoading;
   final Map<String, dynamic>? tokens;
   final String? error;
+  final String? source;
+  final int? updatedAt;
+  final Map<String, dynamic>? stats;
 
   MultiTokenState({
     this.isLoading = false,
     this.tokens,
     this.error,
+    this.source,
+    this.updatedAt,
+    this.stats,
   });
 
   MultiTokenState copyWith({
     bool? isLoading,
     Map<String, dynamic>? tokens,
     String? error,
+    String? source,
+    int? updatedAt,
+    Map<String, dynamic>? stats,
   }) {
     return MultiTokenState(
       isLoading: isLoading ?? this.isLoading,
       tokens: tokens ?? this.tokens,
       error: error,
+      source: source ?? this.source,
+      updatedAt: updatedAt ?? this.updatedAt,
+      stats: stats ?? this.stats,
     );
   }
 }
@@ -85,7 +97,12 @@ class MultiTokenNotifier extends StateNotifier<MultiTokenState> {
     state = MultiTokenState(isLoading: true);
     try {
       final data = await _api.getMultiTokenSentiment(window: window);
-      state = MultiTokenState(tokens: data['tokens']);
+      state = MultiTokenState(
+        tokens: data['tokens'],
+        source: data['source'] as String?,
+        updatedAt: data['updatedAt'] as int?,
+        stats: data['stats'] as Map<String, dynamic>?,
+      );
     } catch (e) {
       state = MultiTokenState(error: e.toString());
     }

@@ -1,20 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class MultiTokenDashboardWidget extends StatelessWidget {
   final Map<String, dynamic> tokens;
   final Function(String token, String coinGeckoId) onTokenSelected;
-  
+  final String? source;
+  final int? updatedAt;
+  final Map<String, dynamic>? stats;
+
   const MultiTokenDashboardWidget({
     super.key,
     required this.tokens,
     required this.onTokenSelected,
+    this.source,
+    this.updatedAt,
+    this.stats,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    
+
+    final isFallback = source == 'fallback';
+    final updatedTime = updatedAt != null
+        ? DateFormat('HH:mm:ss')
+            .format(DateTime.fromMillisecondsSinceEpoch(updatedAt!))
+        : null;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -30,6 +43,41 @@ class MultiTokenDashboardWidget extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                // Source indicator
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isFallback
+                        ? Colors.orange.withValues(alpha: 0.2)
+                        : Colors.green.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isFallback ? Colors.orange : Colors.green,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isFallback ? Icons.warning_amber : Icons.check_circle,
+                        size: 14,
+                        color: isFallback ? Colors.orange : Colors.green,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isFallback ? 'FALLBACK' : 'LIVE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isFallback ? Colors.orange : Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.refresh),
                   onPressed: () {
@@ -40,19 +88,44 @@ class MultiTokenDashboardWidget extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              'Real-time sentiment across top tokens',
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                Text(
+                  'Real-time sentiment across top tokens',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                if (updatedTime != null)
+                  Text(
+                    '• Updated: $updatedTime',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+              ],
             ),
+            if (stats != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '📊 ${stats!['realData'] ?? 0} real / ${stats!['fallbackData'] ?? 0} fallback',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: isFallback ? Colors.orange : Colors.green,
+                  fontSize: 11,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
-            
             if (tokens.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(
                     'No sentiment data available',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
               )
@@ -63,14 +136,14 @@ class MultiTokenDashboardWidget extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildTokenGrid(BuildContext context) {
     final tokenList = tokens.entries.toList();
-    
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final cols = constraints.maxWidth > 600 ? 4 : 2;
-        
+
         return Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -84,21 +157,22 @@ class MultiTokenDashboardWidget extends StatelessWidget {
       },
     );
   }
-  
+
   Widget _buildTokenCard(BuildContext context, String token, dynamic data) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    
+
     final sentiment = data?['sentiment'];
     final positive = (sentiment?['positive'] as num?)?.toDouble() ?? 0.5;
-    final sentimentDiff = (sentiment?['sentimentDiff'] as num?)?.toDouble() ?? 0;
-    
+    final sentimentDiff =
+        (sentiment?['sentimentDiff'] as num?)?.toDouble() ?? 0;
+
     final vibeScore = (positive * 100).round();
-    
+
     // Determine color based on sentiment
     Color sentimentColor;
     String sentimentLabel;
-    
+
     if (vibeScore >= 70) {
       sentimentColor = Colors.green;
       sentimentLabel = '🟢 Bullish';
@@ -109,7 +183,7 @@ class MultiTokenDashboardWidget extends StatelessWidget {
       sentimentColor = Colors.red;
       sentimentLabel = '🔴 Bearish';
     }
-    
+
     return _PressableTokenCard(
       backgroundColor: scheme.surfaceContainerHighest.withValues(alpha: 0.3),
       borderColor: scheme.outlineVariant.withValues(alpha: 0.3),
@@ -126,11 +200,13 @@ class MultiTokenDashboardWidget extends StatelessWidget {
               children: [
                 Text(
                   token,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: sentimentColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
@@ -182,7 +258,7 @@ class MultiTokenDashboardWidget extends StatelessWidget {
       ),
     );
   }
-  
+
   String _getCoinGeckoId(String token) {
     final mapping = {
       'BTC': 'bitcoin',

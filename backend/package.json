@@ -16,6 +16,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "axios": "^1.7.9",
+    "express-rate-limit": "^7.5.1",
     "ethers": "^6.13.4",
     "openai": "^4.77.3"
   },
