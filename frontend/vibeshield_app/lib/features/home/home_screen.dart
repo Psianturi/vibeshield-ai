@@ -429,9 +429,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final api = ref.read(insights.apiServiceProvider);
 
     String chainLabelFor(int? chainId) {
-      if (chainId == 11155111) return 'Sepolia';
       if (chainId == 1) return 'Ethereum';
       if (chainId == 56) return 'BSC';
+      if (chainId == 97) return 'BSC Testnet';
       return chainId == null ? '' : 'Chain $chainId';
     }
 
@@ -452,11 +452,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         if (q.isEmpty) return true;
         if (q.startsWith('0x')) return address.startsWith(q);
-        if (q.contains('sepo')) {
-          return chainId == 11155111 || chainLabel.contains('sepo');
-        }
         if (q.contains('bsc')) {
           return chainId == 56 || chainLabel.contains('bsc');
+        }
+        if (q.contains('test')) {
+          return chainId == 97 || chainLabel.contains('test');
         }
 
         return symbol.contains(q) ||

@@ -12,10 +12,6 @@ const config: HardhatUserConfig = {
     }
   },
   networks: {
-    sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com',
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : []
-    },
     bsc: {
       url: process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/',
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : []

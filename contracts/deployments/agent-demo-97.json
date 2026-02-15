@@ -1,0 +1,14 @@
+{
+  "network": {
+    "name": "bscTestnet",
+    "chainId": 97
+  },
+  "deployer": "0x136e49195511F4cA36d9582b203953d6d8b599f6",
+  "executor": "0x136e49195511F4cA36d9582b203953d6d8b599f6",
+  "wbnb": "0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd",
+  "MockUSDT": "0xc741fE1f0feB4C9daA3738aB2F62cC5251756CeE",
+  "VibeShieldRegistry": "0xD7fC5bBc1047861D5FE4FA752AB4786876Bbe354",
+  "VibeShieldRouter": "0xc87C87c9845019f3B615e36a7D591d9D6112649f",
+  "seededMusdt": "100000",
+  "timestamp": "2026-02-15T13:15:39.867Z"
+}

@@ -16,19 +16,19 @@ async function main() {
   let router = process.env.DEX_ROUTER || process.env.PANCAKESWAP_ROUTER;
   let wrappedNative = process.env.WRAPPED_NATIVE || process.env.WBNB;
 
-  // On Sepolia we deploy mocks so you can test deployment with faucet ETH.
-  if (networkName === 'sepolia') {
+  // On local networks, deploy mocks so you can test deployment without external deps.
+  if (networkName === 'hardhat' || networkName === 'localhost') {
     const RouterStub = await ethers.getContractFactory('RouterStub', deployer);
     const routerStub = await RouterStub.deploy();
     await routerStub.waitForDeployment();
     router = await routerStub.getAddress();
 
     const ERC20Mintable = await ethers.getContractFactory('ERC20Mintable', deployer);
-    const wrapped = await ERC20Mintable.deploy('Wrapped Sepolia ETH (Stub)', 'WSETH', 18);
+    const wrapped = await ERC20Mintable.deploy('Wrapped Native (Stub)', 'WNATIVE', 18);
     await wrapped.waitForDeployment();
     wrappedNative = await wrapped.getAddress();
 
-    console.log('Sepolia mocks deployed:', { router, wrappedNative });
+    console.log('Local mocks deployed:', { router, wrappedNative });
   }
 
   if (!router || !wrappedNative) {

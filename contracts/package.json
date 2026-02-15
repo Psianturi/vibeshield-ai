@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "scripts": {
     "build": "hardhat compile",
-    "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
     "deploy:bsc": "hardhat run scripts/deploy.ts --network bsc",
-    "deploy:testnet": "hardhat run scripts/deploy.ts --network bscTestnet"
+    "deploy:testnet": "hardhat run scripts/deploy.ts --network bscTestnet",
+    "deploy:agent-demo:testnet": "hardhat run scripts/deployAgentDemo.ts --network bscTestnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.1.0",

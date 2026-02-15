@@ -43,7 +43,7 @@ app.get('/health', (req, res) => {
         apiKey: Boolean(process.env.COINGECKO_API_KEY)
       },
       blockchain: {
-        rpcUrl: Boolean(process.env.EVM_RPC_URL || process.env.SEPOLIA_RPC_URL || process.env.BSC_RPC_URL),
+        rpcUrl: Boolean(process.env.EVM_RPC_URL || process.env.BSC_RPC_URL),
         privateKey: Boolean(process.env.PRIVATE_KEY),
         vaultAddress: Boolean(process.env.VIBESHIELD_VAULT_ADDRESS || process.env.VIBEGUARD_VAULT_ADDRESS)
       },

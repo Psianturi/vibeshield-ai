@@ -1,7 +1,0 @@
-{
-  "network": "sepolia",
-  "chainId": 11155111,
-  "router": "0x5239F0D3749134b27B7FFEfAf03A3e3Aca0FFC86",
-  "wrappedNative": "0xEB2F0eAcA3c48700dAE5b57577d054AF5709918b",
-  "vault": "0x5EB409b8482911efdE5B2a695A467Ef30eB15C32"
-}

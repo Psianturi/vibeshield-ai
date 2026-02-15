@@ -23,9 +23,9 @@ For production run with `--dart-define`:
 ```bash
 flutter run -d chrome \
     --dart-define=API_BASE_URL=https://vibeguard-ai-production.up.railway.app \
-    --dart-define=CHAIN_ID=11155111 \
-    --dart-define=RPC_URL=https://ethereum-sepolia-rpc.publicnode.com \
-    --dart-define=EXPLORER_TX_BASE_URL=https://sepolia.etherscan.io/tx/
+    --dart-define=CHAIN_ID=97 \
+    --dart-define=RPC_URL=https://bsc-testnet-rpc.publicnode.com \
+    --dart-define=EXPLORER_TX_BASE_URL=https://testnet.bscscan.com/tx/
 ```
 
 ### Environment / Build Defines

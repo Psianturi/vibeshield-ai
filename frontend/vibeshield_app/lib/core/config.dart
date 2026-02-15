@@ -17,10 +17,12 @@ class AppConfig {
     if (origin.isEmpty) return '/api';
 
     // Prevent accidental double '/api' when API_BASE_URL is already set to an API root.
-    final normalized = origin.endsWith('/') ? origin.substring(0, origin.length - 1) : origin;
+    final normalized =
+        origin.endsWith('/') ? origin.substring(0, origin.length - 1) : origin;
     if (normalized.endsWith('/api')) return normalized;
     return '$normalized/api';
   }
+
   static const String vibeCheckEndpoint = '/vibe/check';
   static const String executeSwapEndpoint = '/vibe/execute-swap';
 
@@ -32,7 +34,7 @@ class AppConfig {
   static const String marketPricesEndpoint = '/vibe/prices';
 
   static const String txHistoryEndpoint = '/vibe/tx-history';
-  
+
   static const String rpcUrl = String.fromEnvironment(
     'RPC_URL',
     defaultValue: 'https://bsc-dataseed.binance.org/',
@@ -41,11 +43,12 @@ class AppConfig {
   static const int chainId = int.fromEnvironment('CHAIN_ID', defaultValue: 56);
 
   static String get explorerTxBaseUrl {
-    const env = String.fromEnvironment('EXPLORER_TX_BASE_URL', defaultValue: '');
+    const env =
+        String.fromEnvironment('EXPLORER_TX_BASE_URL', defaultValue: '');
     if (env.isNotEmpty) return env;
 
-    if (chainId == 11155111) return 'https://sepolia.etherscan.io/tx/';
     if (chainId == 56) return 'https://bscscan.com/tx/';
+    if (chainId == 97) return 'https://testnet.bscscan.com/tx/';
     return '';
   }
 }

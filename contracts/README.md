@@ -1,52 +1,48 @@
-ja# VibeShield Contracts
+# VibeShield Contracts (BSC Testnet)
 
-This folder contains the non-custodial **VibeShieldVault** contract used for "Option B" autopilot execution.
+This folder contains the Solidity contracts and Hardhat scripts for the **Agent Demo** deployed to **BSC Testnet (chainId 97)**.
 
-## What it does
-- Users keep funds in their own wallet.
-- Users **approve** the vault to spend a specific token.
-- Users set their own config (stablecoin, slippage, max amount).
-- A backend "guardian" address can trigger `executeEmergencySwap(user, token, amountIn)`.
-- The contract pulls tokens via `transferFrom` and swaps via PancakeSwap router **to the user**.
+## What’s deployed
 
-## Install
+- `MockUSDT` (mUSDT): mock stablecoin used for deterministic demo flows.
+- `VibeShieldRegistry`: paid agent spawn/registry + strategy selection.
+- `VibeShieldRouter`: executor-only protection execution; mock WBNB→mUSDT swap with strategy caps.
+
+## Setup
+
+1) Install deps
+
 ```bash
-cd contracts
 npm install
-cp .env.example .env
 ```
 
-## Deploy
-```bash
-npm run build
-npm run deploy:bsc
-```
+2) Create `.env`
 
-## Sepolia demo (recommended for testing)
+Copy from `.env.example` and fill:
 
-1) Deploy to Sepolia (this deploys RouterStub + ERC20Mintable wrapped token + VibeShieldVault):
+- `BSC_TESTNET_RPC_URL`
+- `DEPLOYER_PRIVATE_KEY`
+- `EXECUTOR_ADDRESS` (backend executor EOA)
 
-```bash
-npm run deploy:sepolia
-```
+## Deploy (BSC Testnet)
 
-2) Copy the printed addresses into `contracts/.env`:
-
-- `VAULT_ADDRESS=<VibeShieldVault deployed to ...>`
-- `TOKEN_ADDRESS=<wrappedNative from Sepolia mocks deployed ...>`
-
-3) Mint + setConfig + approve in one go:
+This deploys `MockUSDT`, `VibeShieldRegistry`, `VibeShieldRouter`, seeds the router with mUSDT liquidity, and writes a deployment json file.
 
 ```bash
-hardhat run scripts/demoSetup.ts --network sepolia
+npm run deploy:agent-demo:testnet
 ```
 
-After that, the backend guardian can call `executeEmergencySwap(user, token, amountIn)` and you should get a real `txHash` on Sepolia.
+Output is written to:
 
-## User onboarding (high level)
-1. User calls `setConfig(token, stable, enabled, slippageBps, maxAmountIn, useWbnbHop)`
-2. User approves the vault: `approve(vault, amount)` for the `token`
-3. Backend stores the user subscription off-chain and triggers swaps when risk is high.
+- `deployments/agent-demo-97.json`
+
+## Verify / Explore
+
+Use BscScan testnet to view contracts/txs:
+
+- https://testnet.bscscan.com/
 
 ## Notes
-- This is hackathon-grade code. For production: add permit support, path config, better access control, audits.
+
+- The router uses a **mock swap** for stability; it does not depend on testnet DEX liquidity.
+- Do not commit `.env` (it contains private keys).

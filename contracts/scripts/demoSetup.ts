@@ -37,7 +37,7 @@ async function main() {
   const mintTx = await token.mint(user.address, mintWei);
   await mintTx.wait();
 
-  console.log('Setting vault config (stable = token for Sepolia stub)...');
+  console.log('Setting vault config (stable = token for demo)...');
   const cfgTx = await vault.setConfig(
     tokenAddress,
     tokenAddress,
