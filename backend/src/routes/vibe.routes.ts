@@ -3,6 +3,7 @@ import { CryptoracleService } from '../services/cryptoracle.service';
 import { CoinGeckoService } from '../services/coingecko.service';
 import { KalibrService } from '../services/kalibr.service';
 import { BlockchainService } from '../services/blockchain.service';
+import { AgentDemoService } from '../services/agentDemo.service';
 import { loadSubscriptions, upsertSubscription } from '../storage/subscriptions';
 import { appendTxHistory, loadTxHistory } from '../storage/txHistory';
 import { runMonitorOnce } from '../monitor/vibeMonitor';
@@ -47,6 +48,7 @@ let _cryptoracle: CryptoracleService | null = null;
 let _coingecko: CoinGeckoService | null = null;
 let _kalibr: KalibrService | null = null;
 let _blockchain: BlockchainService | null = null;
+let _agentDemo: AgentDemoService | null = null;
 
 function getCryptoracle(): CryptoracleService {
   if (!_cryptoracle) {
@@ -76,6 +78,13 @@ function getBlockchain(): BlockchainService {
   return _blockchain;
 }
 
+function getAgentDemo(): AgentDemoService {
+  if (!_agentDemo) {
+    _agentDemo = new AgentDemoService();
+  }
+  return _agentDemo;
+}
+
 router.get('/debug/models', async (req, res) => {
   const debugEnabled = String(process.env.DEBUG || '').toLowerCase() === 'true';
   if (!debugEnabled) {
@@ -96,6 +105,39 @@ router.get('/public-config', (req, res) => {
     ok: true,
     walletConnectProjectId: String(process.env.WALLETCONNECT_PROJECT_ID || '').trim()
   });
+});
+
+router.get('/agent-demo/config', async (req, res) => {
+  try {
+    const config = await getAgentDemo().getPublicConfig();
+    return res.json({ ok: true, config });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post('/agent-demo/execute-protection', async (req, res) => {
+  try {
+    const { userAddress, amountWbnb } = req.body;
+    const result = await getAgentDemo().executeProtection(
+      String(userAddress || '').trim(),
+      String(amountWbnb || '').trim(),
+    );
+
+    if (result?.success && result?.txHash && userAddress) {
+      appendTxHistory({
+        userAddress: String(userAddress).trim(),
+        tokenAddress: 'WBNB',
+        txHash: result.txHash,
+        timestamp: Date.now(),
+        source: 'agent'
+      });
+    }
+
+    return res.json(result);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 router.get('/token-presets', (req, res) => {

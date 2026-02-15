@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../core/config.dart';
+import '../core/agent_demo.dart';
 import '../models/vibe_models.dart';
 import '../models/insight_models.dart';
 
@@ -20,14 +21,17 @@ class ApiService {
       );
       final data = response.data as Map<String, dynamic>;
       final items = (data['items'] as List?) ?? [];
-      return items.map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
+      return items
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(growable: false);
     } catch (e) {
       return const <Map<String, dynamic>>[];
     }
   }
 
   // Get detailed sentiment insights for a token
-  Future<Map<String, dynamic>> getInsights(String token, {String window = 'Daily'}) async {
+  Future<Map<String, dynamic>> getInsights(String token,
+      {String window = 'Daily'}) async {
     try {
       final response = await _dio.post(
         AppConfig.vibeInsightsEndpoint,
@@ -55,27 +59,63 @@ class ApiService {
     }
   }
 
-
   Future<List<ChainInfo>> getChains() async {
     try {
       final response = await _dio.get(AppConfig.vibeChainsEndpoint);
       final data = response.data as Map<String, dynamic>;
       final chains = (data['chains'] as List?) ?? [];
-      return chains.map((e) => ChainInfo.fromJson(e as Map<String, dynamic>)).toList();
+      return chains
+          .map((e) => ChainInfo.fromJson(e as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       return _defaultChains;
     }
   }
 
   static final _defaultChains = [
-    ChainInfo(id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC', network: 'Bitcoin', icon: '₿'),
-    ChainInfo(id: 'binancecoin', name: 'BNB', symbol: 'BNB', network: 'BNB Chain', icon: 'B'),
-    ChainInfo(id: 'ethereum', name: 'Ethereum', symbol: 'ETH', network: 'Ethereum', icon: 'Ξ'),
-    ChainInfo(id: 'solana', name: 'Solana', symbol: 'SOL', network: 'Solana', icon: '◎'),
-    ChainInfo(id: 'ripple', name: 'XRP', symbol: 'XRP', network: 'XRP Ledger', icon: '✕'),
-    ChainInfo(id: 'dogecoin', name: 'Dogecoin', symbol: 'DOGE', network: 'Dogecoin', icon: 'Ð'),
+    ChainInfo(
+        id: 'bitcoin',
+        name: 'Bitcoin',
+        symbol: 'BTC',
+        network: 'Bitcoin',
+        icon: '₿'),
+    ChainInfo(
+        id: 'binancecoin',
+        name: 'BNB',
+        symbol: 'BNB',
+        network: 'BNB Chain',
+        icon: 'B'),
+    ChainInfo(
+        id: 'ethereum',
+        name: 'Ethereum',
+        symbol: 'ETH',
+        network: 'Ethereum',
+        icon: 'Ξ'),
+    ChainInfo(
+        id: 'solana',
+        name: 'Solana',
+        symbol: 'SOL',
+        network: 'Solana',
+        icon: '◎'),
+    ChainInfo(
+        id: 'ripple',
+        name: 'XRP',
+        symbol: 'XRP',
+        network: 'XRP Ledger',
+        icon: '✕'),
+    ChainInfo(
+        id: 'dogecoin',
+        name: 'Dogecoin',
+        symbol: 'DOGE',
+        network: 'Dogecoin',
+        icon: 'Ð'),
     ChainInfo(id: 'sui', name: 'Sui', symbol: 'SUI', network: 'Sui', icon: '⚡'),
-    ChainInfo(id: 'tether', name: 'Tether', symbol: 'USDT', network: 'Multi-chain', icon: '₮'),
+    ChainInfo(
+        id: 'tether',
+        name: 'Tether',
+        symbol: 'USDT',
+        network: 'Multi-chain',
+        icon: '₮'),
   ];
 
   Future<VibeCheckResult> checkVibe(String token, String tokenId) async {
@@ -112,15 +152,52 @@ class ApiService {
     }
   }
 
-  Future<List<TxHistoryItem>> getTxHistory({required String userAddress, int limit = 50}) async {
+  Future<AgentDemoConfig?> getAgentDemoConfig() async {
+    try {
+      final response = await _dio.get(AppConfig.agentDemoConfigEndpoint);
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['ok'] == true) {
+        final cfg = data['config'];
+        if (cfg is Map) {
+          return AgentDemoConfig.fromJson(cfg.cast<String, dynamic>());
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> executeAgentProtection({
+    required String userAddress,
+    required String amountWbnb,
+  }) async {
+    final response = await _dio.post(
+      AppConfig.agentDemoExecuteEndpoint,
+      data: {
+        'userAddress': userAddress,
+        'amountWbnb': amountWbnb,
+      },
+    );
+    final data = response.data;
+    return (data is Map<String, dynamic>)
+        ? data
+        : <String, dynamic>{'success': false, 'error': 'Invalid response'};
+  }
+
+  Future<List<TxHistoryItem>> getTxHistory(
+      {required String userAddress, int limit = 50}) async {
     try {
       final response = await _dio.get(
         AppConfig.txHistoryEndpoint,
         queryParameters: {'userAddress': userAddress, 'limit': limit},
       );
       final data = response.data;
-      final items = (data is Map<String, dynamic>) ? (data['items'] as List? ?? []) : [];
-      return items.map((e) => TxHistoryItem.fromJson(e as Map<String, dynamic>)).toList();
+      final items =
+          (data is Map<String, dynamic>) ? (data['items'] as List? ?? []) : [];
+      return items
+          .map((e) => TxHistoryItem.fromJson(e as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       throw Exception('Failed to load tx history: $e');
     }
@@ -140,18 +217,19 @@ class ApiService {
       );
 
       final data = response.data;
-      final items = (data is Map<String, dynamic>) ? (data['items'] as List? ?? []) : [];
+      final items =
+          (data is Map<String, dynamic>) ? (data['items'] as List? ?? []) : [];
       return items
           .whereType<Map>()
           .map((e) => PriceData.fromJson(Map<String, dynamic>.from(e)))
           .toList(growable: false);
     } catch (e) {
-
       return await _getMarketPricesFromCoinGecko(resolvedIds);
     }
   }
 
-  Future<List<PriceData>> _getMarketPricesFromCoinGecko(List<String> ids) async {
+  Future<List<PriceData>> _getMarketPricesFromCoinGecko(
+      List<String> ids) async {
     final dio = Dio(BaseOptions(
       baseUrl: _coinGeckoBaseUrl,
       connectTimeout: const Duration(seconds: 20),
@@ -182,8 +260,12 @@ class ApiService {
         PriceData(
           token: id,
           price: usd.toDouble(),
-          volume24h: (row['usd_24h_vol'] is num) ? (row['usd_24h_vol'] as num).toDouble() : 0,
-          priceChange24h: (row['usd_24h_change'] is num) ? (row['usd_24h_change'] as num).toDouble() : 0,
+          volume24h: (row['usd_24h_vol'] is num)
+              ? (row['usd_24h_vol'] as num).toDouble()
+              : 0,
+          priceChange24h: (row['usd_24h_change'] is num)
+              ? (row['usd_24h_change'] as num).toDouble()
+              : 0,
         ),
       );
     }

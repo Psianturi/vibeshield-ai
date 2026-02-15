@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/vibe_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/tx_history_provider.dart';
 import '../../providers/market_prices_provider.dart';
 import '../../providers/insights_provider.dart' as insights;
 import '../../core/config.dart';
+import '../../core/agent_demo.dart';
 import '../dashboard/vibe_meter_widget.dart';
 import '../dashboard/sentiment_insights_widget.dart';
 import '../dashboard/multi_token_dashboard_widget.dart';
@@ -23,10 +25,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _tokenIdController = TextEditingController(text: 'bitcoin');
   final _tokenAddressController = TextEditingController(text: '');
   final _amountController = TextEditingController(text: '1');
+  final _agentAmountController = TextEditingController(text: '0.01');
   final _tokenIdFocusNode = FocusNode();
   final _tokenAddressFocusNode = FocusNode();
 
   bool _isSwapping = false;
+  bool _agentBusy = false;
+  int _selectedStrategy = 1; // 1 = TIGHT, 2 = LOOSE
+  AgentDemoConfig? _agentConfig;
 
   @override
   void initState() {
@@ -272,6 +278,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _tokenIdController.dispose();
     _tokenAddressController.dispose();
     _amountController.dispose();
+    _agentAmountController.dispose();
     _tokenIdFocusNode.dispose();
     _tokenAddressFocusNode.dispose();
     super.dispose();
@@ -416,10 +423,263 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 const SizedBox(height: 24),
                 _buildEmergencySwapCard(context, walletState.address!),
                 const SizedBox(height: 16),
+                _buildAgentDemoCard(context, walletState.address!),
+                const SizedBox(height: 16),
                 _buildTxHistoryCard(context, walletState.address!),
               ]
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAgentDemoCard(BuildContext context, String userAddress) {
+    final api = ref.read(insights.apiServiceProvider);
+    final walletService = ref.read(walletServiceProvider);
+
+    Future<void> ensureConfig() async {
+      if (_agentConfig != null) return;
+      final cfg = await api.getAgentDemoConfig();
+      if (!mounted) return;
+      setState(() => _agentConfig = cfg);
+    }
+
+    Future<void> runGuarded(Future<void> Function() action) async {
+      if (_agentBusy) return;
+      setState(() => _agentBusy = true);
+      try {
+        await action();
+      } finally {
+        if (mounted) setState(() => _agentBusy = false);
+      }
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Agent', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            FutureBuilder<void>(
+              future: ensureConfig(),
+              builder: (context, _) {
+                final cfg = _agentConfig;
+                if (cfg == null) {
+                  return const Text('Loading on-chain config...');
+                }
+
+                final feeWei = cfg.creationFeeWei;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'chainId: ${cfg.chainId ?? AppConfig.chainId}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Text('Strategy:'),
+                        const SizedBox(width: 12),
+                        DropdownButton<int>(
+                          value: _selectedStrategy,
+                          items: const [
+                            DropdownMenuItem(value: 1, child: Text('Tight')),
+                            DropdownMenuItem(value: 2, child: Text('Loose')),
+                          ],
+                          onChanged: _agentBusy
+                              ? null
+                              : (v) {
+                                  if (v == null) return;
+                                  setState(() => _selectedStrategy = v);
+                                },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _agentBusy
+                            ? null
+                            : () async {
+                                await runGuarded(() async {
+                                  final data =
+                                      AgentDemoTxBuilder.spawnAgentData(
+                                    strategy: _selectedStrategy,
+                                  );
+
+                                  final txHash =
+                                      await walletService.sendTransaction(
+                                    to: cfg.registry,
+                                    data: data,
+                                    valueWei: feeWei,
+                                  );
+
+                                  if (!mounted) return;
+                                  if (txHash == null || txHash.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content:
+                                            Text('Transaction was not sent.'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  final url = AppConfig
+                                          .explorerTxBaseUrl.isNotEmpty
+                                      ? '${AppConfig.explorerTxBaseUrl}$txHash'
+                                      : '';
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Spawn tx: $txHash'),
+                                      action: url.isEmpty
+                                          ? null
+                                          : SnackBarAction(
+                                              label: 'View',
+                                              onPressed: () =>
+                                                  launchUrl(Uri.parse(url)),
+                                            ),
+                                    ),
+                                  );
+                                });
+                              },
+                        child: const Text('Spawn agent'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _agentBusy
+                            ? null
+                            : () async {
+                                await runGuarded(() async {
+                                  final data = AgentDemoTxBuilder.approveData(
+                                    spender: cfg.router,
+                                    amount: AgentDemoTxBuilder.maxUint256(),
+                                  );
+
+                                  final txHash =
+                                      await walletService.sendTransaction(
+                                    to: cfg.wbnb,
+                                    data: data,
+                                  );
+
+                                  if (!mounted) return;
+                                  if (txHash == null || txHash.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Approval was not sent.'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  final url = AppConfig
+                                          .explorerTxBaseUrl.isNotEmpty
+                                      ? '${AppConfig.explorerTxBaseUrl}$txHash'
+                                      : '';
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Approve tx: $txHash'),
+                                      action: url.isEmpty
+                                          ? null
+                                          : SnackBarAction(
+                                              label: 'View',
+                                              onPressed: () =>
+                                                  launchUrl(Uri.parse(url)),
+                                            ),
+                                    ),
+                                  );
+                                });
+                              },
+                        child: const Text('Approve WBNB to router'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _agentAmountController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Amount WBNB to protect',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _agentBusy
+                            ? null
+                            : () async {
+                                final amount =
+                                    _agentAmountController.text.trim();
+                                if (amount.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Amount is required.'),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                await runGuarded(() async {
+                                  final result =
+                                      await api.executeAgentProtection(
+                                    userAddress: userAddress,
+                                    amountWbnb: amount,
+                                  );
+
+                                  if (!mounted) return;
+                                  final ok = result['success'] == true;
+                                  if (!ok) {
+                                    final err = (result['error'] ?? 'Failed')
+                                        .toString();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(err)),
+                                    );
+                                    return;
+                                  }
+
+                                  final txHash =
+                                      (result['txHash'] ?? '').toString();
+                                  if (txHash.isNotEmpty) {
+                                    ref.invalidate(
+                                        txHistoryProvider(userAddress));
+                                    final url = AppConfig
+                                            .explorerTxBaseUrl.isNotEmpty
+                                        ? '${AppConfig.explorerTxBaseUrl}$txHash'
+                                        : '';
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Protected. Tx: $txHash'),
+                                        action: url.isEmpty
+                                            ? null
+                                            : SnackBarAction(
+                                                label: 'View',
+                                                onPressed: () =>
+                                                    launchUrl(Uri.parse(url)),
+                                              ),
+                                      ),
+                                    );
+                                  }
+                                });
+                              },
+                        child: const Text('Execute protection'),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
         ),
       ),
     );

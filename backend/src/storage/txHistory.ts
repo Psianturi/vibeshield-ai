@@ -6,7 +6,7 @@ export interface TxHistoryItem {
   tokenAddress: string;
   txHash: string;
   timestamp: number;
-  source: 'monitor' | 'manual';
+  source: 'monitor' | 'manual' | 'agent';
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');

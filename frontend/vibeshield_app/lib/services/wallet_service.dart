@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:reown_appkit/reown_appkit.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/config.dart';
+import '../core/agent_demo.dart';
 
 class WalletService {
   static WalletService? _instance;
@@ -57,7 +58,8 @@ class WalletService {
   }
 
   Future<String> _getProjectId() async {
-    final existing = (_resolvedProjectId ?? AppConfig.walletConnectProjectId).trim();
+    final existing =
+        (_resolvedProjectId ?? AppConfig.walletConnectProjectId).trim();
     if (existing.isNotEmpty) {
       _resolvedProjectId = existing;
       return existing;
@@ -76,12 +78,13 @@ class WalletService {
           : '';
 
       String joinUrl(String base, String path) {
-        final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+        final b =
+            base.endsWith('/') ? base.substring(0, base.length - 1) : base;
         return '$b$path';
       }
 
       final candidates = <String>{
-        if (apiBaseUrl.isNotEmpty) joinUrl(apiBaseUrl, '/vibe/public-config'), 
+        if (apiBaseUrl.isNotEmpty) joinUrl(apiBaseUrl, '/vibe/public-config'),
         if (origin.isNotEmpty) joinUrl(origin, '/api/vibe/public-config'),
         if (origin.isNotEmpty) joinUrl(origin, '/vibe/public-config'),
       }.toList();
@@ -92,15 +95,19 @@ class WalletService {
           final res = await dio.get(
             url,
             options: Options(
-              validateStatus: (code) => code != null && code >= 200 && code < 500,
+              validateStatus: (code) =>
+                  code != null && code >= 200 && code < 500,
             ),
           );
           lastStatus = res.statusCode;
 
-          if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 300) {
+          if (res.statusCode != null &&
+              res.statusCode! >= 200 &&
+              res.statusCode! < 300) {
             final data = res.data;
             if (data is Map) {
-              final pid = (data['walletConnectProjectId'] ?? '').toString().trim();
+              final pid =
+                  (data['walletConnectProjectId'] ?? '').toString().trim();
               if (pid.isNotEmpty) {
                 _resolvedProjectId = pid;
                 return pid;
@@ -165,23 +172,25 @@ class WalletService {
           bool launched = false;
           for (final candidate in candidates) {
             try {
-              final ok = await launchUrl(candidate, mode: LaunchMode.externalApplication);
+              final ok = await launchUrl(candidate,
+                  mode: LaunchMode.externalApplication);
               if (ok) {
                 launched = true;
                 break;
               }
-            } catch (_) {
-            }
+            } catch (_) {}
           }
 
           if (!launched) {
-            throw Exception('No compatible wallet app found. Install MetaMask/Trust Wallet and try again.');
+            throw Exception(
+                'No compatible wallet app found. Install MetaMask/Trust Wallet and try again.');
           }
         }
       }
 
-      _session = await response.session.future.timeout(const Duration(minutes: 2));
-      
+      _session =
+          await response.session.future.timeout(const Duration(minutes: 2));
+
       if (_session != null) {
         final accounts = _session!.namespaces['eip155']?.accounts ?? [];
         if (accounts.isNotEmpty) {
@@ -193,7 +202,8 @@ class WalletService {
 
       return null;
     } on TimeoutException {
-      _lastError = 'WalletConnect approval timed out. Please open your wallet app and approve the connection, then try again.';
+      _lastError =
+          'WalletConnect approval timed out. Please open your wallet app and approve the connection, then try again.';
       debugPrint('WalletConnect error: $_lastError');
       return null;
     } catch (e) {
@@ -260,6 +270,41 @@ class WalletService {
       return signature as String?;
     } catch (e) {
       debugPrint('Sign message error: $e');
+      return null;
+    }
+  }
+
+  Future<String?> sendTransaction({
+    required String to,
+    required String data,
+    BigInt? valueWei,
+  }) async {
+    if (_session == null || _appKit == null || _currentAddress == null) {
+      throw Exception('Wallet not connected');
+    }
+
+    final tx = <String, dynamic>{
+      'from': _currentAddress,
+      'to': to,
+      'data': data,
+    };
+
+    if (valueWei != null) {
+      tx['value'] = AgentDemoTxBuilder.toHexQuantity(valueWei);
+    }
+
+    try {
+      final result = await _appKit!.request(
+        topic: _session!.topic,
+        chainId: 'eip155:${AppConfig.chainId}',
+        request: SessionRequestParams(
+          method: 'eth_sendTransaction',
+          params: [tx],
+        ),
+      );
+      return result as String?;
+    } catch (e) {
+      debugPrint('Send transaction error: $e');
       return null;
     }
   }

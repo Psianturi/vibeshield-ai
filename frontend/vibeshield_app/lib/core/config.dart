@@ -26,6 +26,11 @@ class AppConfig {
   static const String vibeCheckEndpoint = '/vibe/check';
   static const String executeSwapEndpoint = '/vibe/execute-swap';
 
+  // Agent demo endpoints (BSC Testnet wiring)
+  static const String agentDemoConfigEndpoint = '/vibe/agent-demo/config';
+  static const String agentDemoExecuteEndpoint =
+      '/vibe/agent-demo/execute-protection';
+
   // Endpoints for enhanced Cryptoracle data
   static const String vibeInsightsEndpoint = '/vibe/insights';
   static const String vibeMultiEndpoint = '/vibe/multi';
