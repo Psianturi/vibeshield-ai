@@ -1,20 +1,23 @@
-import 'package:flutter/foundation.dart';
 import 'dart:async';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:reown_appkit/reown_appkit.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../core/config.dart';
+
 import '../core/agent_demo.dart';
+import '../core/config.dart';
 
 class WalletService {
   static WalletService? _instance;
+
   ReownAppKit? _appKit;
   SessionData? _session;
   String? _currentAddress;
+  int? _sessionChainId;
   String? _lastError;
   String? _resolvedProjectId;
 
-  // Stream controller for connection state changes
   final _connectionController = StreamController<bool>.broadcast();
   Stream<bool> get connectionStream => _connectionController.stream;
 
@@ -27,6 +30,7 @@ class WalletService {
 
   bool get isConnected => _session != null && _currentAddress != null;
   String? get address => _currentAddress;
+  int? get chainId => _sessionChainId;
   String? get lastError => _lastError;
 
   Future<void> init() async {
@@ -46,7 +50,6 @@ class WalletService {
         ),
       );
 
-      // Listen to session events
       _appKit!.onSessionConnect.subscribe(_onSessionConnect);
       _appKit!.onSessionDelete.subscribe(_onSessionDelete);
 
@@ -115,7 +118,7 @@ class WalletService {
             }
           }
         } catch (_) {
-          // Try next candidate.
+          // try next candidate
         }
       }
 
@@ -130,6 +133,81 @@ class WalletService {
   }
 
   Future<String?> connect() async {
+    Future<String?> attemptConnect(
+        {required List<String> requiredChains}) async {
+      final ConnectResponse response = await _appKit!.connect(
+        requiredNamespaces: {
+          'eip155': RequiredNamespace(
+            chains: requiredChains,
+            methods: const [
+              'eth_sendTransaction',
+              'personal_sign',
+              'eth_chainId',
+              'eth_accounts',
+            ],
+            events: const ['chainChanged', 'accountsChanged'],
+          ),
+        },
+      );
+
+      final Uri? uri = response.uri;
+      if (uri != null) {
+        if (kIsWeb) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          // Launch wc: URI first to let Android route to the correct wallet.
+          final encoded = Uri.encodeComponent(uri.toString());
+          final candidates = <Uri>[
+            uri,
+            Uri.parse('metamask://wc?uri=$encoded'),
+            Uri.parse('trust://wc?uri=$encoded'),
+          ];
+
+          bool launched = false;
+          for (final candidate in candidates) {
+            try {
+              final ok = await launchUrl(
+                candidate,
+                mode: LaunchMode.externalApplication,
+              );
+              if (ok) {
+                launched = true;
+                break;
+              }
+            } catch (_) {
+              // try next
+            }
+          }
+
+          if (!launched) {
+            throw Exception(
+              'No compatible wallet app found. Install a WalletConnect-compatible wallet and try again.',
+            );
+          }
+        }
+      }
+
+      _session =
+          await response.session.future.timeout(const Duration(minutes: 2));
+
+      final accounts = _session?.namespaces['eip155']?.accounts ?? [];
+      if (accounts.isEmpty) return null;
+
+      final first = accounts.first;
+      final parts = first.split(':');
+      _sessionChainId = (parts.length >= 2) ? int.tryParse(parts[1]) : null;
+      _currentAddress = parts.isNotEmpty ? parts.last : null;
+
+      if (_currentAddress == null || _currentAddress!.isEmpty) {
+        _lastError = 'WalletConnect session approved, but no address found.';
+        await disconnect();
+        return null;
+      }
+
+      _connectionController.add(true);
+      return _currentAddress;
+    }
+
     try {
       _lastError = null;
       await init();
@@ -138,77 +216,43 @@ class WalletService {
         throw Exception(_lastError ?? 'Reown AppKit not initialized');
       }
 
-      // Check if already connected
       if (_session != null) {
         return _currentAddress;
       }
 
-      // Create connection
-      final ConnectResponse response = await _appKit!.connect(
-        requiredNamespaces: {
-          'eip155': RequiredNamespace(
-            chains: ['eip155:${AppConfig.chainId}'],
-            methods: ['eth_sendTransaction', 'personal_sign'],
-            events: ['chainChanged', 'accountsChanged'],
-          ),
-        },
-      );
+      // Always propose mainnet (56) which all wallets support.
+      // Session chainId is tracked separately; Agent demo gates on correct chain.
+      final primaryChains = const ['eip155:56'];
 
-      final Uri? uri = response.uri;
-      if (uri != null) {
-        // Open wallet app
-        if (kIsWeb) {
-          // For web, show QR code or deep link
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } else {
-          // For mobile, try known wallet deep links first, then fallback to the raw WalletConnect URI.
-          final encoded = Uri.encodeComponent(uri.toString());
-          final candidates = <Uri>[
-            Uri.parse('metamask://wc?uri=$encoded'),
-            Uri.parse('trust://wc?uri=$encoded'),
-            uri,
-          ];
-
-          bool launched = false;
-          for (final candidate in candidates) {
-            try {
-              final ok = await launchUrl(candidate,
-                  mode: LaunchMode.externalApplication);
-              if (ok) {
-                launched = true;
-                break;
-              }
-            } catch (_) {}
-          }
-
-          if (!launched) {
-            throw Exception(
-                'No compatible wallet app found. Install MetaMask/Trust Wallet and try again.');
-          }
-        }
-      }
-
-      _session =
-          await response.session.future.timeout(const Duration(minutes: 2));
-
-      if (_session != null) {
-        final accounts = _session!.namespaces['eip155']?.accounts ?? [];
-        if (accounts.isNotEmpty) {
-          _currentAddress = accounts.first.split(':').last;
-          _connectionController.add(true);
-          return _currentAddress;
-        }
-      }
-
-      return null;
+      return await attemptConnect(requiredChains: primaryChains);
     } on TimeoutException {
       _lastError =
           'WalletConnect approval timed out. Please open your wallet app and approve the connection, then try again.';
       debugPrint('WalletConnect error: $_lastError');
+      _session = null;
+      _currentAddress = null;
+      _sessionChainId = null;
       return null;
     } catch (e) {
-      _lastError = e.toString();
+      final raw = e.toString();
+      if (raw.contains('JsonRpcError') &&
+          raw.contains('code: 4001') &&
+          raw.toLowerCase().contains('reject')) {
+        _lastError =
+            'Connection was rejected in your wallet. Please open your wallet app and approve the connection request.';
+      } else if (raw.toLowerCase().contains('not supported') ||
+          raw.toLowerCase().contains('unsupported') ||
+          (raw.toLowerCase().contains('jaringan') &&
+              raw.toLowerCase().contains('didukung'))) {
+        _lastError =
+            'Network is not supported in the wallet. Please add/switch to BSC Testnet (chainId 97) in your wallet and try again.';
+      } else {
+        _lastError = raw;
+      }
       debugPrint('WalletConnect error: $e');
+      _session = null;
+      _currentAddress = null;
+      _sessionChainId = null;
       return null;
     }
   }
@@ -231,6 +275,7 @@ class WalletService {
     }
     _session = null;
     _currentAddress = null;
+    _sessionChainId = null;
     _lastError = null;
     _connectionController.add(false);
   }
@@ -240,7 +285,10 @@ class WalletService {
       _session = event.session;
       final accounts = _session!.namespaces['eip155']?.accounts ?? [];
       if (accounts.isNotEmpty) {
-        _currentAddress = accounts.first.split(':').last;
+        final first = accounts.first;
+        final parts = first.split(':');
+        _sessionChainId = (parts.length >= 2) ? int.tryParse(parts[1]) : null;
+        _currentAddress = parts.isNotEmpty ? parts.last : null;
         _connectionController.add(true);
       }
     }
@@ -258,9 +306,10 @@ class WalletService {
     }
 
     try {
+      final cid = _sessionChainId ?? AppConfig.chainId;
       final signature = await _appKit!.request(
         topic: _session!.topic,
-        chainId: 'eip155:${AppConfig.chainId}',
+        chainId: 'eip155:$cid',
         request: SessionRequestParams(
           method: 'personal_sign',
           params: [message, _currentAddress],
@@ -294,9 +343,10 @@ class WalletService {
     }
 
     try {
+      final cid = _sessionChainId ?? AppConfig.chainId;
       final result = await _appKit!.request(
         topic: _session!.topic,
-        chainId: 'eip155:${AppConfig.chainId}',
+        chainId: 'eip155:$cid',
         request: SessionRequestParams(
           method: 'eth_sendTransaction',
           params: [tx],
@@ -307,6 +357,25 @@ class WalletService {
       debugPrint('Send transaction error: $e');
       return null;
     }
+  }
+
+  Future<bool> openWalletApp() async {
+    if (kIsWeb) return false;
+
+    final candidates = <Uri>[
+      Uri.parse('metamask://'),
+      Uri.parse('trust://'),
+    ];
+
+    for (final uri in candidates) {
+      try {
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (ok) return true;
+      } catch (_) {
+        // ignore and try next
+      }
+    }
+    return false;
   }
 
   void dispose() {

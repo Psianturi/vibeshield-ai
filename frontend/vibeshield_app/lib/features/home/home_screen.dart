@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -31,6 +33,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   bool _isSwapping = false;
   bool _agentBusy = false;
+  String? _agentBusyAction; // spawn|approve|execute
   int _selectedStrategy = 1; // 1 = TIGHT, 2 = LOOSE
   Future<AgentDemoConfig?>? _agentConfigFuture;
 
@@ -452,13 +455,71 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       });
     }
 
-    Future<void> runGuarded(Future<void> Function() action) async {
-      if (_agentBusy) return;
-      setState(() => _agentBusy = true);
+    String formatWeiToBnb(BigInt? wei) {
+      if (wei == null) return '';
+
+      const decimals = 18;
+      final s = wei.toString();
+      if (s == '0') return '0';
+      final padded = s.padLeft(decimals + 1, '0');
+      final intPart = padded.substring(0, padded.length - decimals);
+      var frac = padded.substring(padded.length - decimals);
+      // Keep up to 6 decimals for readability.
+      frac = frac.substring(0, 6);
+      frac = frac.replaceFirst(RegExp(r'0+$'), '');
+      return frac.isEmpty ? intPart : '$intPart.$frac';
+    }
+
+    Future<T?> runWithBlockingDialog<T>({
+      required String title,
+      required String message,
+      required Future<T?> Function() action,
+      bool showOpenWallet = false,
+    }) async {
+      if (!mounted) return null;
+
+      // Show dialog first.
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(title),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message),
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
+            ),
+            actions: [
+              if (showOpenWallet)
+                TextButton(
+                  onPressed: () => walletService.openWalletApp(),
+                  child: const Text('Open wallet'),
+                ),
+            ],
+          );
+        },
+      );
+
+      // Optionally try to bring wallet to foreground.
+      if (showOpenWallet) {
+        unawaited(walletService.openWalletApp());
+      }
+
       try {
-        await action();
+        return await action();
       } finally {
-        if (mounted) setState(() => _agentBusy = false);
+        if (mounted) {
+          try {
+            Navigator.of(context, rootNavigator: true).pop();
+          } catch (_) {
+            // ignore
+          }
+        }
       }
     }
 
@@ -521,12 +582,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 }
 
                 final feeWei = cfg.creationFeeWei;
+                final feeBnb = formatWeiToBnb(feeWei);
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'chainId: ${cfg.chainId ?? AppConfig.chainId}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (feeBnb.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'creation fee: $feeBnb BNB',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      'Steps: 1) Spawn agent → 2) Approve WBNB → 3) Execute protection',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 12),
@@ -552,40 +626,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: FilledButton(
                         onPressed: _agentBusy
                             ? null
                             : () async {
-                                await runGuarded(() async {
+                                final requiredChainId =
+                                    cfg.chainId ?? AppConfig.chainId;
+                                final connectedChainId =
+                                    walletService.chainId ?? AppConfig.chainId;
+                                if (connectedChainId != requiredChainId) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
+                                      ),
+                                      action: SnackBarAction(
+                                        label: 'Open wallet',
+                                        onPressed: () =>
+                                            walletService.openWalletApp(),
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setState(() {
+                                  _agentBusy = true;
+                                  _agentBusyAction = 'spawn';
+                                });
+                                try {
                                   final data =
                                       AgentDemoTxBuilder.spawnAgentData(
                                     strategy: _selectedStrategy,
                                   );
 
                                   final txHash =
-                                      await walletService.sendTransaction(
-                                    to: cfg.registry,
-                                    data: data,
-                                    valueWei: feeWei,
+                                      await runWithBlockingDialog<String?>(
+                                    title: 'Confirm in wallet',
+                                    message:
+                                        'A transaction request was sent. Please open your wallet and confirm the Spawn transaction.',
+                                    showOpenWallet: true,
+                                    action: () => walletService.sendTransaction(
+                                      to: cfg.registry,
+                                      data: data,
+                                      valueWei: feeWei,
+                                    ),
                                   );
 
                                   if (!mounted) return;
                                   if (txHash == null || txHash.isEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content:
-                                            Text('Transaction was not sent.'),
+                                        content: Text(
+                                            'Spawn was not confirmed in wallet.'),
                                       ),
                                     );
                                     return;
                                   }
 
-                                  final url =
-                                      AppConfig.explorerTxBaseUrl.isNotEmpty
-                                          ? explorerTxUrl(txHash,
-                                              chainId: cfg.chainId)
-                                          : explorerTxUrl(txHash,
-                                              chainId: cfg.chainId);
+                                  final url = explorerTxUrl(
+                                    txHash,
+                                    chainId: cfg.chainId,
+                                  );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text('Spawn tx: $txHash'),
@@ -598,9 +700,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                     ),
                                   );
-                                });
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _agentBusy = false;
+                                      _agentBusyAction = null;
+                                    });
+                                  }
+                                }
                               },
-                        child: const Text('Spawn agent'),
+                        child: (_agentBusy && _agentBusyAction == 'spawn')
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Step 1 — Spawn agent'),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -610,34 +727,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         onPressed: _agentBusy
                             ? null
                             : () async {
-                                await runGuarded(() async {
+                                final requiredChainId =
+                                    cfg.chainId ?? AppConfig.chainId;
+                                final connectedChainId =
+                                    walletService.chainId ?? AppConfig.chainId;
+                                if (connectedChainId != requiredChainId) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
+                                      ),
+                                      action: SnackBarAction(
+                                        label: 'Open wallet',
+                                        onPressed: () =>
+                                            walletService.openWalletApp(),
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setState(() {
+                                  _agentBusy = true;
+                                  _agentBusyAction = 'approve';
+                                });
+                                try {
                                   final data = AgentDemoTxBuilder.approveData(
                                     spender: cfg.router,
                                     amount: AgentDemoTxBuilder.maxUint256(),
                                   );
 
                                   final txHash =
-                                      await walletService.sendTransaction(
-                                    to: cfg.wbnb,
-                                    data: data,
+                                      await runWithBlockingDialog<String?>(
+                                    title: 'Confirm in wallet',
+                                    message:
+                                        'Please confirm the Approve transaction in your wallet. This allows the router to spend your WBNB.',
+                                    showOpenWallet: true,
+                                    action: () => walletService.sendTransaction(
+                                      to: cfg.wbnb,
+                                      data: data,
+                                    ),
                                   );
 
                                   if (!mounted) return;
                                   if (txHash == null || txHash.isEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Approval was not sent.'),
+                                        content: Text(
+                                            'Approve was not confirmed in wallet.'),
                                       ),
                                     );
                                     return;
                                   }
 
-                                  final url =
-                                      AppConfig.explorerTxBaseUrl.isNotEmpty
-                                          ? explorerTxUrl(txHash,
-                                              chainId: cfg.chainId)
-                                          : explorerTxUrl(txHash,
-                                              chainId: cfg.chainId);
+                                  final url = explorerTxUrl(
+                                    txHash,
+                                    chainId: cfg.chainId,
+                                  );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text('Approve tx: $txHash'),
@@ -650,9 +796,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                     ),
                                   );
-                                });
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _agentBusy = false;
+                                      _agentBusyAction = null;
+                                    });
+                                  }
+                                }
                               },
-                        child: const Text('Approve WBNB to router'),
+                        child: (_agentBusy && _agentBusyAction == 'approve')
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Step 2 — Approve WBNB to router'),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -668,7 +829,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: FilledButton.tonal(
                         onPressed: _agentBusy
                             ? null
                             : () async {
@@ -683,14 +844,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   return;
                                 }
 
-                                await runGuarded(() async {
-                                  final result =
-                                      await api.executeAgentProtection(
-                                    userAddress: userAddress,
-                                    amountWbnb: amount,
+                                setState(() {
+                                  _agentBusy = true;
+                                  _agentBusyAction = 'execute';
+                                });
+                                try {
+                                  final result = await runWithBlockingDialog<
+                                      Map<String, dynamic>>(
+                                    title: 'Submitting to guardian',
+                                    message:
+                                        'This step is executed by the backend guardian (no wallet confirmation). Please wait…',
+                                    action: () => api.executeAgentProtection(
+                                      userAddress: userAddress,
+                                      amountWbnb: amount,
+                                    ),
                                   );
 
-                                  if (!mounted) return;
+                                  if (!mounted || result == null) return;
                                   final ok = result['success'] == true;
                                   if (!ok) {
                                     final err = (result['error'] ?? 'Failed')
@@ -706,8 +876,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   if (txHash.isNotEmpty) {
                                     ref.invalidate(
                                         txHistoryProvider(userAddress));
-                                    final url = explorerTxUrl(txHash,
-                                        chainId: cfg.chainId);
+                                    final url = explorerTxUrl(
+                                      txHash,
+                                      chainId: cfg.chainId,
+                                    );
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text('Protected. Tx: $txHash'),
@@ -721,9 +893,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                     );
                                   }
-                                });
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _agentBusy = false;
+                                      _agentBusyAction = null;
+                                    });
+                                  }
+                                }
                               },
-                        child: const Text('Execute protection'),
+                        child: (_agentBusy && _agentBusyAction == 'execute')
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Step 3 — Execute protection'),
                       ),
                     ),
                   ],

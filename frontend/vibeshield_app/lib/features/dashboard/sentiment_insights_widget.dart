@@ -144,12 +144,12 @@ class SentimentInsightsWidget extends StatelessWidget {
             // Sentiment Scores Section
             _buildSectionTitle(theme, '💭 Sentiment Scores'),
             const SizedBox(height: 8),
-            _buildSentimentBar(context, 'Positive', (sentiment['positive'] ?? 0) * 100, Colors.green),
+            _buildSentimentBar(context, 'Positive', ((sentiment['positive'] ?? 0) as num).toDouble() * 100, Colors.green),
             const SizedBox(height: 8),
-            _buildSentimentBar(context, 'Negative', (sentiment['negative'] ?? 0) * 100, Colors.red),
+            _buildSentimentBar(context, 'Negative', ((sentiment['negative'] ?? 0) as num).toDouble() * 100, Colors.red),
             const SizedBox(height: 8),
-            _buildSentimentBar(context, 'Net Sentiment', ((sentiment['sentimentDiff'] ?? 0) + 1) * 50, 
-              (sentiment['sentimentDiff'] ?? 0) >= 0 ? Colors.green : Colors.red),
+            _buildSentimentBar(context, 'Net Sentiment', (((sentiment['sentimentDiff'] ?? 0) as num).toDouble() + 1) * 50, 
+              ((sentiment['sentimentDiff'] ?? 0) as num).toDouble() >= 0 ? Colors.green : Colors.red),
             
             const SizedBox(height: 20),
             
@@ -157,10 +157,10 @@ class SentimentInsightsWidget extends StatelessWidget {
             _buildSectionTitle(theme, '📈 Sentiment Signals'),
             const SizedBox(height: 8),
             _buildMetricGrid(context, [
-              _MetricItem('Deviation', _formatSignal(signals['deviation'] ?? 0)),
-              _MetricItem('Momentum', _formatSignal(signals['momentum'] ?? 0)),
-              _MetricItem('Breakout', _formatSignal(signals['breakout'] ?? 0)),
-              _MetricItem('Price Dislocation', _formatSignal(signals['priceDislocation'] ?? 0)),
+              _MetricItem('Deviation', _formatSignal(((signals['deviation'] ?? 0) as num).toDouble())),
+              _MetricItem('Momentum', _formatSignal(((signals['momentum'] ?? 0) as num).toDouble())),
+              _MetricItem('Breakout', _formatSignal(((signals['breakout'] ?? 0) as num).toDouble())),
+              _MetricItem('Price Dislocation', _formatSignal(((signals['priceDislocation'] ?? 0) as num).toDouble())),
             ]),
           ],
         ),
