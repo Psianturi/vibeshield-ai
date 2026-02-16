@@ -135,23 +135,44 @@ class WalletService {
   }
 
   Future<String?> connect() async {
-    Future<String?> attemptConnect(
-        {required List<String> requiredChains}) async {
+    Future<String?> attemptConnect({
+      required List<String> requiredChains,
+      List<String> optionalChains = const [],
+    }) async {
+      const requiredMethods = [
+        'eth_sendTransaction',
+        'personal_sign',
+        'eth_chainId',
+        'eth_accounts',
+      ];
+      const optionalMethods = [
+        ...requiredMethods,
+        'wallet_switchEthereumChain',
+        'wallet_addEthereumChain',
+      ];
+      const events = ['chainChanged', 'accountsChanged'];
+
+      final requiredNamespaces = {
+        'eip155': RequiredNamespace(
+          chains: requiredChains,
+          methods: requiredMethods,
+          events: events,
+        ),
+      };
+
+      final optionalNamespaces = optionalChains.isEmpty
+          ? null
+          : {
+              'eip155': RequiredNamespace(
+                chains: optionalChains,
+                methods: optionalMethods,
+                events: events,
+              ),
+            };
+
       final ConnectResponse response = await _appKit!.connect(
-        requiredNamespaces: {
-          'eip155': RequiredNamespace(
-            chains: requiredChains,
-            methods: const [
-              'eth_sendTransaction',
-              'personal_sign',
-              'eth_chainId',
-              'eth_accounts',
-              'wallet_switchEthereumChain',
-              'wallet_addEthereumChain',
-            ],
-            events: const ['chainChanged', 'accountsChanged'],
-          ),
-        },
+        requiredNamespaces: requiredNamespaces,
+        optionalNamespaces: optionalNamespaces,
       );
 
       final Uri? uri = response.uri;
@@ -235,10 +256,16 @@ class WalletService {
         return _currentAddress;
       }
 
-      // Propose the configured chain to keep WalletConnect in sync with app config.
-      final primaryChains = ['eip155:${AppConfig.chainId}'];
 
-      return await attemptConnect(requiredChains: primaryChains);
+      final requiredChains = const ['eip155:56'];
+      final optionalChains = (AppConfig.chainId == 56)
+          ? const <String>[]
+          : ['eip155:${AppConfig.chainId}'];
+
+      return await attemptConnect(
+        requiredChains: requiredChains,
+        optionalChains: optionalChains,
+      );
     } on TimeoutException {
       _lastError =
           'WalletConnect approval timed out. Please open your wallet app and approve the connection, then try again.';
@@ -317,13 +344,14 @@ class WalletService {
   Future<bool> _ensureChain(int chainId) async {
     if (_appKit == null || _session == null) return false;
 
+    final requestChainId = _sessionChainId ?? AppConfig.chainId;
     final hexChainId = _toHexChainId(chainId);
     final chainParams = _chainParams(chainId);
 
     try {
       await _appKit!.request(
         topic: _session!.topic,
-        chainId: 'eip155:$chainId',
+        chainId: 'eip155:$requestChainId',
         request: SessionRequestParams(
           method: 'wallet_switchEthereumChain',
           params: [
@@ -346,7 +374,7 @@ class WalletService {
       try {
         await _appKit!.request(
           topic: _session!.topic,
-          chainId: 'eip155:$chainId',
+          chainId: 'eip155:$requestChainId',
           request: SessionRequestParams(
             method: 'wallet_addEthereumChain',
             params: [chainParams],
@@ -355,7 +383,7 @@ class WalletService {
 
         await _appKit!.request(
           topic: _session!.topic,
-          chainId: 'eip155:$chainId',
+          chainId: 'eip155:$requestChainId',
           request: SessionRequestParams(
             method: 'wallet_switchEthereumChain',
             params: [
