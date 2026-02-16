@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,62 @@ class WalletButton extends ConsumerWidget {
   const WalletButton({super.key, this.compact = true});
 
   final bool compact;
+
+  Future<void> _connectWithOptions(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(walletProvider.notifier);
+
+    if (!kIsWeb) {
+      await notifier.connect();
+      return;
+    }
+
+    final walletService = ref.read(walletServiceProvider);
+    final hasInjected = walletService.hasInjected;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        Future<void> runConnect(Future<void> Function() action) async {
+          Navigator.of(context, rootNavigator: true).pop();
+          await action();
+        }
+
+        return AlertDialog(
+          title: const Text('Connect wallet'),
+          content: Text(
+            hasInjected
+                ? 'Choose how to connect your wallet.'
+                : 'MetaMask not detected. Use WalletConnect or install MetaMask.',
+          ),
+          actions: [
+            if (hasInjected)
+              TextButton(
+                onPressed: () => runConnect(notifier.connectInjected),
+                child: const Text('MetaMask'),
+              ),
+            TextButton(
+              onPressed: () => runConnect(notifier.connectWalletConnect),
+              child: const Text('WalletConnect'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final err = ref.read(walletProvider).error;
+    if (err != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -69,16 +126,7 @@ class WalletButton extends ConsumerWidget {
       return IconButton(
         tooltip: 'Connect Wallet',
         onPressed: () async {
-          await ref.read(walletProvider.notifier).connect();
-          final err = ref.read(walletProvider).error;
-          if (err != null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(err),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
+          await _connectWithOptions(context, ref);
         },
         icon: const Icon(Icons.account_balance_wallet),
       );
@@ -86,19 +134,7 @@ class WalletButton extends ConsumerWidget {
 
     return ElevatedButton.icon(
       onPressed: () async {
-        await ref.read(walletProvider.notifier).connect();
-
-        final err = ref.read(walletProvider).error;
-        if (err != null) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(err),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
+        await _connectWithOptions(context, ref);
       },
       icon: const Icon(Icons.account_balance_wallet, size: 18),
       label: const Text('Connect Wallet'),

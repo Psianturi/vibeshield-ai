@@ -33,10 +33,13 @@ class WalletService {
     return _instance!;
   }
 
-  bool get isConnected => _session != null && _currentAddress != null;
+  bool get isConnected =>
+      _currentAddress != null && (_session != null || _usingInjected);
   String? get address => _currentAddress;
   int? get chainId => _sessionChainId;
   String? get lastError => _lastError;
+  bool get hasInjected => _injected.isAvailable;
+  bool get isUsingInjected => _usingInjected;
 
   Future<void> init() async {
     if (_appKit != null) return;
@@ -138,49 +141,132 @@ class WalletService {
   }
 
   Future<String?> connect() async {
-    Future<String?> attemptInjectedConnect() async {
-      if (!_injected.isAvailable) return null;
-      debugPrint('[wallet] web injected connect');
+    try {
+      _lastError = null;
+      await init();
 
-      final accounts = await _injected.requestAccounts();
-      if (accounts.isEmpty) {
-        _lastError = 'No accounts returned by wallet.';
-        return null;
-      }
-
-      _currentAddress = accounts.first;
-      _sessionChainId = await _injected.requestChainId();
-      _session = null;
-      _usingInjected = true;
-      debugPrint(
-        '[wallet] injected account=${_currentAddress ?? 'n/a'} chainId=${_sessionChainId ?? 'n/a'}',
-      );
-
-      if (_sessionChainId != AppConfig.chainId) {
-        debugPrint(
-          '[wallet] injected switch chain from ${_sessionChainId ?? 'n/a'} to ${AppConfig.chainId}',
-        );
-        final ok = await _ensureChain(AppConfig.chainId);
-        if (!ok) {
-          _lastError = _lastError ??
-              'Network is not supported in the wallet. Please add/switch to the configured network and try again.';
-          debugPrint('[wallet] injected chain switch failed: $_lastError');
-          _usingInjected = false;
-          _currentAddress = null;
-          _sessionChainId = null;
+      if (kIsWeb && _injected.isAvailable) {
+        try {
+          final addr = await _attemptInjectedConnect();
+          if (addr != null) return addr;
+          return null;
+        } catch (e) {
+          _lastError = e.toString();
+          debugPrint('[wallet] injected connect error: $_lastError');
           return null;
         }
-        _sessionChainId = AppConfig.chainId;
       }
 
-      _connectionController.add(true);
+      return await connectWalletConnect();
+    } on TimeoutException {
+      _lastError =
+          'WalletConnect approval timed out. Please open your wallet app and approve the connection, then try again.';
+      debugPrint('WalletConnect error: $_lastError');
+      _session = null;
+      _currentAddress = null;
+      _sessionChainId = null;
+      return null;
+    } catch (e) {
+      final raw = e.toString();
+      debugPrint('[wallet] connect error: $raw');
+      if (raw.contains('JsonRpcError') &&
+          raw.contains('code: 4001') &&
+          raw.toLowerCase().contains('reject')) {
+        _lastError =
+            'Connection was rejected in your wallet. Please open your wallet app and approve the connection request.';
+      } else if (raw.toLowerCase().contains('not supported') ||
+          raw.toLowerCase().contains('unsupported') ||
+          (raw.toLowerCase().contains('jaringan') &&
+              raw.toLowerCase().contains('didukung'))) {
+        _lastError =
+            'Network is not supported in the wallet. Please add/switch to BSC Testnet (chainId 97) in your wallet and try again.';
+      } else {
+        _lastError = raw;
+      }
+      debugPrint('WalletConnect error: $e');
+      _session = null;
+      _currentAddress = null;
+      _sessionChainId = null;
+      return null;
+    }
+  }
+
+  Future<String?> connectInjected() async {
+    _lastError = null;
+    await init();
+    return _attemptInjectedConnect();
+  }
+
+  Future<String?> connectWalletConnect() async {
+    _lastError = null;
+    await init();
+
+    if (_appKit == null) {
+      throw Exception(_lastError ?? 'Reown AppKit not initialized');
+    }
+
+    if (_session != null) {
       return _currentAddress;
     }
 
-    Future<String?> attemptConnect({
-      required List<String> requiredChains,
-      List<String> optionalChains = const [],
-    }) async {
+    final requiredChains = const ['eip155:56'];
+    final optionalChains = (AppConfig.chainId == 56)
+        ? const <String>[]
+        : ['eip155:${AppConfig.chainId}'];
+
+    return _attemptWalletConnect(
+      requiredChains: requiredChains,
+      optionalChains: optionalChains,
+    );
+  }
+
+  Future<String?> _attemptInjectedConnect() async {
+    if (!_injected.isAvailable) {
+      _lastError =
+          'MetaMask not detected. Install/enable the MetaMask extension and refresh the page.';
+      return null;
+    }
+    debugPrint('[wallet] web injected connect');
+
+    final accounts = await _injected.requestAccounts();
+    if (accounts.isEmpty) {
+      _lastError = 'No accounts returned by wallet.';
+      return null;
+    }
+
+    _currentAddress = accounts.first;
+    _sessionChainId = await _injected.requestChainId();
+    _session = null;
+    _usingInjected = true;
+    debugPrint(
+      '[wallet] injected account=${_currentAddress ?? 'n/a'} chainId=${_sessionChainId ?? 'n/a'}',
+    );
+
+    if (_sessionChainId != AppConfig.chainId) {
+      debugPrint(
+        '[wallet] injected switch chain from ${_sessionChainId ?? 'n/a'} to ${AppConfig.chainId}',
+      );
+      final ok = await _ensureChain(AppConfig.chainId);
+      if (!ok) {
+        _lastError = _lastError ??
+            'Network is not supported in the wallet. Please add/switch to the configured network and try again.';
+        debugPrint('[wallet] injected chain switch failed: $_lastError');
+        _usingInjected = false;
+        _currentAddress = null;
+        _sessionChainId = null;
+        return null;
+      }
+      _sessionChainId = AppConfig.chainId;
+    }
+
+    _connectionController.add(true);
+    return _currentAddress;
+  }
+
+  Future<String?> _attemptWalletConnect({
+    required List<String> requiredChains,
+    List<String> optionalChains = const [],
+  }) async {
       debugPrint(
         '[wallet] connect: required=$requiredChains optional=$optionalChains',
       );
@@ -298,71 +384,7 @@ class WalletService {
       return _currentAddress;
     }
 
-    try {
-      _lastError = null;
-      await init();
-
-      if (kIsWeb && _injected.isAvailable) {
-        try {
-          final addr = await attemptInjectedConnect();
-          if (addr != null) return addr;
-          return null;
-        } catch (e) {
-          _lastError = e.toString();
-          debugPrint('[wallet] injected connect error: $_lastError');
-          return null;
-        }
-      }
-
-      if (_appKit == null) {
-        throw Exception(_lastError ?? 'Reown AppKit not initialized');
-      }
-
-      if (_session != null) {
-        return _currentAddress;
-      }
-
-      final requiredChains = const ['eip155:56'];
-      final optionalChains = (AppConfig.chainId == 56)
-          ? const <String>[]
-          : ['eip155:${AppConfig.chainId}'];
-
-      return await attemptConnect(
-        requiredChains: requiredChains,
-        optionalChains: optionalChains,
-      );
-    } on TimeoutException {
-      _lastError =
-          'WalletConnect approval timed out. Please open your wallet app and approve the connection, then try again.';
-      debugPrint('WalletConnect error: $_lastError');
-      _session = null;
-      _currentAddress = null;
-      _sessionChainId = null;
-      return null;
-    } catch (e) {
-      final raw = e.toString();
-      debugPrint('[wallet] connect error: $raw');
-      if (raw.contains('JsonRpcError') &&
-          raw.contains('code: 4001') &&
-          raw.toLowerCase().contains('reject')) {
-        _lastError =
-            'Connection was rejected in your wallet. Please open your wallet app and approve the connection request.';
-      } else if (raw.toLowerCase().contains('not supported') ||
-          raw.toLowerCase().contains('unsupported') ||
-          (raw.toLowerCase().contains('jaringan') &&
-              raw.toLowerCase().contains('didukung'))) {
-        _lastError =
-            'Network is not supported in the wallet. Please add/switch to BSC Testnet (chainId 97) in your wallet and try again.';
-      } else {
-        _lastError = raw;
-      }
-      debugPrint('WalletConnect error: $e');
-      _session = null;
-      _currentAddress = null;
-      _sessionChainId = null;
-      return null;
     }
-  }
 
   Future<void> disconnect() async {
     if (_session != null && _appKit != null) {

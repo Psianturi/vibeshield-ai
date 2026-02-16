@@ -102,6 +102,54 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
+  Future<void> _connectWallet() async {
+    if (!mounted) return;
+
+    final notifier = ref.read(walletProvider.notifier);
+
+    if (!kIsWeb) {
+      await notifier.connect();
+      return;
+    }
+
+    final walletService = ref.read(walletServiceProvider);
+    final hasInjected = walletService.hasInjected;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        Future<void> runConnect(Future<void> Function() action) async {
+          Navigator.of(context, rootNavigator: true).pop();
+          await action();
+        }
+
+        return AlertDialog(
+          title: const Text('Connect wallet'),
+          content: Text(
+            hasInjected
+                ? 'Choose how to connect your wallet.'
+                : 'MetaMask not detected. Use WalletConnect or install MetaMask.',
+          ),
+          actions: [
+            if (hasInjected)
+              TextButton(
+                onPressed: () => runConnect(notifier.connectInjected),
+                child: const Text('MetaMask'),
+              ),
+            TextButton(
+              onPressed: () => runConnect(notifier.connectWalletConnect),
+              child: const Text('WalletConnect'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   static const List<Map<String, String>> _coinGeckoPresets = [
     {'symbol': 'BTC', 'id': 'bitcoin'},
     {'symbol': 'BNB', 'id': 'binancecoin'},
@@ -365,7 +413,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           else
             IconButton(
               tooltip: 'Connect wallet',
-              onPressed: () => ref.read(walletProvider.notifier).connect(),
+              onPressed: _connectWallet,
               icon: const Icon(Icons.account_balance_wallet),
             ),
         ],
@@ -413,8 +461,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           if (!walletState.isConnected)
                             ElevatedButton(
-                              onPressed: () =>
-                                  ref.read(walletProvider.notifier).connect(),
+                              onPressed: _connectWallet,
                               child: const Text('Connect'),
                             ),
                         ],

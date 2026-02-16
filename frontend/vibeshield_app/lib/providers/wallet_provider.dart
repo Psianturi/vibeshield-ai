@@ -52,11 +52,23 @@ class WalletNotifier extends StateNotifier<WalletState> {
   }
 
   Future<void> connect() async {
+    await _connectWith(_walletService.connect);
+  }
+
+  Future<void> connectInjected() async {
+    await _connectWith(_walletService.connectInjected);
+  }
+
+  Future<void> connectWalletConnect() async {
+    await _connectWith(_walletService.connectWalletConnect);
+  }
+
+  Future<void> _connectWith(Future<String?> Function() connectFn) async {
     state = state.copyWith(isLoading: true, error: null);
-    
+
     try {
-      final address = await _walletService.connect();
-      
+      final address = await connectFn();
+
       if (address != null) {
         state = state.copyWith(
           isConnected: true,
