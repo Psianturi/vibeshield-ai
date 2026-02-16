@@ -713,13 +713,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   _agentBusyAction = 'spawn';
                                 });
                                 try {
+                                  debugPrint(
+                                    '[agent] spawn start chain=${cfg.chainId ?? AppConfig.chainId} registry=${cfg.registry} feeWei=${feeWei ?? 'n/a'} strategy=$_selectedStrategy',
+                                  );
                                   final data =
                                       AgentDemoTxBuilder.spawnAgentData(
                                     strategy: _selectedStrategy,
                                   );
 
-                                  final txHash =
-                                      await runWithBlockingDialog<String?>(
+                                  final txHash = await runWithBlockingDialog<
+                                      String?>(
                                     title: 'Confirm in wallet',
                                     message:
                                         'A transaction request was sent. Please open your wallet and confirm the Spawn transaction.',
@@ -733,14 +736,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                                   if (!mounted) return;
                                   if (txHash == null || txHash.isEmpty) {
+                                    final err = walletService.lastError ??
+                                        'No wallet error detail';
+                                    debugPrint('[agent] spawn failed: $err');
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
+                                      SnackBar(
                                         content: Text(
-                                            'Spawn was not confirmed in wallet.'),
+                                          'Spawn was not confirmed in wallet. ($err)',
+                                        ),
                                       ),
                                     );
                                     return;
                                   }
+
+                                  debugPrint('[agent] spawn txHash=$txHash');
 
                                   final url = explorerTxUrl(
                                     txHash,
@@ -810,13 +819,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   _agentBusyAction = 'approve';
                                 });
                                 try {
+                                  debugPrint(
+                                    '[agent] approve start chain=${cfg.chainId ?? AppConfig.chainId} wbnb=${cfg.wbnb} router=${cfg.router}',
+                                  );
                                   final data = AgentDemoTxBuilder.approveData(
                                     spender: cfg.router,
                                     amount: AgentDemoTxBuilder.maxUint256(),
                                   );
 
-                                  final txHash =
-                                      await runWithBlockingDialog<String?>(
+                                  final txHash = await runWithBlockingDialog<
+                                      String?>(
                                     title: 'Confirm in wallet',
                                     message:
                                         'Please confirm the Approve transaction in your wallet. This allows the router to spend your WBNB.',
@@ -829,14 +841,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                                   if (!mounted) return;
                                   if (txHash == null || txHash.isEmpty) {
+                                    final err = walletService.lastError ??
+                                        'No wallet error detail';
+                                    debugPrint('[agent] approve failed: $err');
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
+                                      SnackBar(
                                         content: Text(
-                                            'Approve was not confirmed in wallet.'),
+                                          'Approve was not confirmed in wallet. ($err)',
+                                        ),
                                       ),
                                     );
                                     return;
                                   }
+
+                                  debugPrint('[agent] approve txHash=$txHash');
 
                                   final url = explorerTxUrl(
                                     txHash,

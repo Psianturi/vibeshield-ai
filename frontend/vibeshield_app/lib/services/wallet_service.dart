@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/agent_demo.dart';
 import '../core/config.dart';
+import 'web3_injected.dart';
 
 class WalletService {
   static WalletService? _instance;
@@ -17,6 +18,8 @@ class WalletService {
   int? _sessionChainId;
   String? _lastError;
   String? _resolvedProjectId;
+  bool _usingInjected = false;
+  final Web3Injected _injected = Web3Injected();
 
   final _connectionController = StreamController<bool>.broadcast();
   Stream<bool> get connectionStream => _connectionController.stream;
@@ -135,10 +138,52 @@ class WalletService {
   }
 
   Future<String?> connect() async {
+    Future<String?> attemptInjectedConnect() async {
+      if (!_injected.isAvailable) return null;
+      debugPrint('[wallet] web injected connect');
+
+      final accounts = await _injected.requestAccounts();
+      if (accounts.isEmpty) {
+        _lastError = 'No accounts returned by wallet.';
+        return null;
+      }
+
+      _currentAddress = accounts.first;
+      _sessionChainId = await _injected.requestChainId();
+      _session = null;
+      _usingInjected = true;
+      debugPrint(
+        '[wallet] injected account=${_currentAddress ?? 'n/a'} chainId=${_sessionChainId ?? 'n/a'}',
+      );
+
+      if (_sessionChainId != AppConfig.chainId) {
+        debugPrint(
+          '[wallet] injected switch chain from ${_sessionChainId ?? 'n/a'} to ${AppConfig.chainId}',
+        );
+        final ok = await _ensureChain(AppConfig.chainId);
+        if (!ok) {
+          _lastError = _lastError ??
+              'Network is not supported in the wallet. Please add/switch to the configured network and try again.';
+          debugPrint('[wallet] injected chain switch failed: $_lastError');
+          _usingInjected = false;
+          _currentAddress = null;
+          _sessionChainId = null;
+          return null;
+        }
+        _sessionChainId = AppConfig.chainId;
+      }
+
+      _connectionController.add(true);
+      return _currentAddress;
+    }
+
     Future<String?> attemptConnect({
       required List<String> requiredChains,
       List<String> optionalChains = const [],
     }) async {
+      debugPrint(
+        '[wallet] connect: required=$requiredChains optional=$optionalChains',
+      );
       const requiredMethods = [
         'eth_sendTransaction',
         'personal_sign',
@@ -177,6 +222,7 @@ class WalletService {
 
       final Uri? uri = response.uri;
       if (uri != null) {
+        debugPrint('[wallet] wc uri: $uri');
         if (kIsWeb) {
           _wcUriController.add(uri);
         } else {
@@ -214,6 +260,7 @@ class WalletService {
 
       _session =
           await response.session.future.timeout(const Duration(minutes: 2));
+      debugPrint('[wallet] session approved');
 
       final accounts = _session?.namespaces['eip155']?.accounts ?? [];
       if (accounts.isEmpty) return null;
@@ -222,6 +269,9 @@ class WalletService {
       final parts = first.split(':');
       _sessionChainId = (parts.length >= 2) ? int.tryParse(parts[1]) : null;
       _currentAddress = parts.isNotEmpty ? parts.last : null;
+      debugPrint(
+        '[wallet] account=${_currentAddress ?? 'n/a'} chainId=${_sessionChainId ?? 'n/a'}',
+      );
 
       if (_currentAddress == null || _currentAddress!.isEmpty) {
         _lastError = 'WalletConnect session approved, but no address found.';
@@ -230,10 +280,14 @@ class WalletService {
       }
 
       if (_sessionChainId != AppConfig.chainId) {
+        debugPrint(
+          '[wallet] switch chain from ${_sessionChainId ?? 'n/a'} to ${AppConfig.chainId}',
+        );
         final ok = await _ensureChain(AppConfig.chainId);
         if (!ok) {
           _lastError = _lastError ??
               'Network is not supported in the wallet. Please add/switch to the configured network and try again.';
+          debugPrint('[wallet] chain switch failed: $_lastError');
           await disconnect();
           return null;
         }
@@ -248,6 +302,18 @@ class WalletService {
       _lastError = null;
       await init();
 
+      if (kIsWeb && _injected.isAvailable) {
+        try {
+          final addr = await attemptInjectedConnect();
+          if (addr != null) return addr;
+          return null;
+        } catch (e) {
+          _lastError = e.toString();
+          debugPrint('[wallet] injected connect error: $_lastError');
+          return null;
+        }
+      }
+
       if (_appKit == null) {
         throw Exception(_lastError ?? 'Reown AppKit not initialized');
       }
@@ -255,7 +321,6 @@ class WalletService {
       if (_session != null) {
         return _currentAddress;
       }
-
 
       final requiredChains = const ['eip155:56'];
       final optionalChains = (AppConfig.chainId == 56)
@@ -276,6 +341,7 @@ class WalletService {
       return null;
     } catch (e) {
       final raw = e.toString();
+      debugPrint('[wallet] connect error: $raw');
       if (raw.contains('JsonRpcError') &&
           raw.contains('code: 4001') &&
           raw.toLowerCase().contains('reject')) {
@@ -318,6 +384,7 @@ class WalletService {
     _currentAddress = null;
     _sessionChainId = null;
     _lastError = null;
+    _usingInjected = false;
     _connectionController.add(false);
   }
 
@@ -342,6 +409,47 @@ class WalletService {
   }
 
   Future<bool> _ensureChain(int chainId) async {
+    if (_usingInjected) {
+      try {
+        await _injected.switchChain(chainId);
+        final active = await _injected.requestChainId();
+        if (active != null && active != chainId) {
+          _lastError = 'Wallet remained on chainId $active after switch request.';
+          debugPrint('[wallet] injected chain still $active after switch');
+          return false;
+        }
+        return true;
+      } catch (e) {
+        final raw = e.toString();
+        debugPrint('[wallet] injected switch chain error: $raw');
+        final needsAdd = raw.contains('4902') ||
+            raw.toLowerCase().contains('unrecognized') ||
+            raw.toLowerCase().contains('unknown chain');
+
+        final chainParams = _chainParams(chainId);
+        if (!needsAdd || chainParams == null) {
+          _lastError = raw;
+          return false;
+        }
+
+        try {
+          await _injected.addChain(chainParams);
+          await _injected.switchChain(chainId);
+          final active = await _injected.requestChainId();
+          if (active != null && active != chainId) {
+            _lastError = 'Wallet remained on chainId $active after add/switch.';
+            debugPrint('[wallet] injected chain still $active after add/switch');
+            return false;
+          }
+          return true;
+        } catch (err) {
+          _lastError = err.toString();
+          debugPrint('[wallet] injected add/switch chain failed: $_lastError');
+          return false;
+        }
+      }
+    }
+
     if (_appKit == null || _session == null) return false;
 
     final requestChainId = _sessionChainId ?? AppConfig.chainId;
@@ -349,6 +457,7 @@ class WalletService {
     final chainParams = _chainParams(chainId);
 
     try {
+      debugPrint('[wallet] request switch chain to $chainId');
       await _appKit!.request(
         topic: _session!.topic,
         chainId: 'eip155:$requestChainId',
@@ -359,9 +468,16 @@ class WalletService {
           ],
         ),
       );
+      final active = await _readChainId(requestChainId);
+      if (active != null && active != chainId) {
+        _lastError = 'Wallet remained on chainId $active after switch request.';
+        debugPrint('[wallet] chain still $active after switch');
+        return false;
+      }
       return true;
     } catch (e) {
       final raw = e.toString();
+      debugPrint('[wallet] switch chain error: $raw');
       final needsAdd = raw.contains('4902') ||
           raw.toLowerCase().contains('unrecognized') ||
           raw.toLowerCase().contains('unknown chain');
@@ -372,6 +488,7 @@ class WalletService {
       }
 
       try {
+        debugPrint('[wallet] request add chain $chainId');
         await _appKit!.request(
           topic: _session!.topic,
           chainId: 'eip155:$requestChainId',
@@ -381,6 +498,7 @@ class WalletService {
           ),
         );
 
+        debugPrint('[wallet] request switch chain to $chainId (after add)');
         await _appKit!.request(
           topic: _session!.topic,
           chainId: 'eip155:$requestChainId',
@@ -391,11 +509,45 @@ class WalletService {
             ],
           ),
         );
+        final active = await _readChainId(requestChainId);
+        if (active != null && active != chainId) {
+          _lastError = 'Wallet remained on chainId $active after add/switch.';
+          debugPrint('[wallet] chain still $active after add/switch');
+          return false;
+        }
         return true;
       } catch (err) {
         _lastError = err.toString();
+        debugPrint('[wallet] add/switch chain failed: $_lastError');
         return false;
       }
+    }
+  }
+
+  Future<int?> _readChainId(int requestChainId) async {
+    if (_usingInjected) {
+      return _injected.requestChainId();
+    }
+
+    if (_appKit == null || _session == null) return null;
+
+    try {
+      final result = await _appKit!.request(
+        topic: _session!.topic,
+        chainId: 'eip155:$requestChainId',
+        request: SessionRequestParams(
+          method: 'eth_chainId',
+          params: const [],
+        ),
+      );
+
+      if (result is String) {
+        return int.tryParse(result.replaceFirst('0x', ''), radix: 16);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[wallet] eth_chainId error: $e');
+      return null;
     }
   }
 
@@ -479,7 +631,9 @@ class WalletService {
     required String data,
     BigInt? valueWei,
   }) async {
-    if (_session == null || _appKit == null || _currentAddress == null) {
+    if ((_session == null && !_usingInjected) ||
+        _currentAddress == null ||
+        (_appKit == null && !_usingInjected)) {
       throw Exception('Wallet not connected');
     }
 
@@ -494,18 +648,28 @@ class WalletService {
     }
 
     try {
-      final cid = _sessionChainId ?? AppConfig.chainId;
-      final result = await _appKit!.request(
-        topic: _session!.topic,
-        chainId: 'eip155:$cid',
-        request: SessionRequestParams(
-          method: 'eth_sendTransaction',
-          params: [tx],
-        ),
-      );
+      debugPrint('[wallet] send tx to=$to valueWei=${valueWei ?? BigInt.zero}');
+      final result = _usingInjected
+          ? await _injected.sendTransaction(tx)
+          : await _appKit!
+              .request(
+                topic: _session!.topic,
+                chainId: 'eip155:${_sessionChainId ?? AppConfig.chainId}',
+                request: SessionRequestParams(
+                  method: 'eth_sendTransaction',
+                  params: [tx],
+                ),
+              )
+              .timeout(const Duration(seconds: 90));
+      debugPrint('[wallet] send tx result: $result');
       return result as String?;
+    } on TimeoutException {
+      _lastError = 'Wallet transaction timed out.';
+      debugPrint('[wallet] send tx timeout');
+      return null;
     } catch (e) {
-      debugPrint('Send transaction error: $e');
+      debugPrint('[wallet] send tx error: $e');
+      _lastError = e.toString();
       return null;
     }
   }
