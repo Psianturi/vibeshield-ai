@@ -40,6 +40,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String? _agentBusyAction; // spawn|approve|execute
   int _selectedStrategy = 1; // 1 = TIGHT, 2 = LOOSE
   Future<AgentDemoConfig?>? _agentConfigFuture;
+  Future<AgentDemoStatus?>? _agentStatusFuture;
 
   @override
   void initState() {
@@ -572,6 +573,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       });
     }
 
+    void refreshAgentStatus() {
+      setState(() {
+        _agentStatusFuture = api.getAgentDemoStatus(userAddress: userAddress);
+      });
+    }
+
     String formatWeiToBnb(BigInt? wei) {
       if (wei == null) return '';
 
@@ -702,9 +709,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 final feeBnb = formatWeiToBnb(feeWei);
                 final configError = cfg.configError;
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                return FutureBuilder<AgentDemoStatus?>(
+                  future: _agentStatusFuture ??=
+                      api.getAgentDemoStatus(userAddress: userAddress),
+                  builder: (context, statusSnap) {
+                    final status = statusSnap.data;
+                    final step1Done = status?.isAgentActive == true;
+                    final step2Done = status?.hasApproval == true;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                     Text(
                       'chainId: ${cfg.chainId ?? AppConfig.chainId}',
                       style: Theme.of(context).textTheme.bodySmall,
@@ -790,6 +805,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       'Steps: 1) Spawn agent → 2) Approve WBNB → 3) Execute protection',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    if (statusSnap.connectionState == ConnectionState.waiting) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Checking on-chain step status...',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ] else if (status != null) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          Chip(
+                            label: Text(
+                              step1Done
+                                  ? '✅ Step 1 done (Agent active)'
+                                  : 'Step 1 pending',
+                            ),
+                          ),
+                          Chip(
+                            label: Text(
+                              step2Done
+                                  ? '✅ Step 2 done (Approved)'
+                                  : 'Step 2 pending',
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (status.statusError != null &&
+                          status.statusError!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Status warning: ${status.statusError}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -814,7 +866,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: _agentBusy
+                        onPressed: (_agentBusy || step1Done)
                             ? null
                             : () async {
                                 final requiredChainId =
@@ -897,7 +949,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Spawn tx: $txHash'),
+                                      content: Text(
+                                          'Spawn submitted: $txHash. Waiting confirmation on chain...'),
                                       action: url.isEmpty
                                           ? null
                                           : SnackBarAction(
@@ -907,6 +960,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                     ),
                                   );
+                                  refreshAgentStatus();
                                 } finally {
                                   if (mounted) {
                                     setState(() {
@@ -924,14 +978,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text('Step 1 — Spawn agent'),
+                            : Text(step1Done
+                                ? 'Step 1 — Spawn agent (Done ✅)'
+                                : 'Step 1 — Spawn agent'),
                       ),
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: _agentBusy
+                        onPressed: (_agentBusy || step2Done)
                             ? null
                             : () async {
                                 final requiredChainId =
@@ -1002,7 +1058,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Approve tx: $txHash'),
+                                      content: Text(
+                                          'Approve submitted: $txHash. Waiting confirmation on chain...'),
                                       action: url.isEmpty
                                           ? null
                                           : SnackBarAction(
@@ -1012,6 +1069,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                     ),
                                   );
+                                  refreshAgentStatus();
                                 } finally {
                                   if (mounted) {
                                     setState(() {
@@ -1029,7 +1087,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text('Step 2 — Approve WBNB to router'),
+                            : Text(step2Done
+                                ? 'Step 2 — Approve WBNB to router (Done ✅)'
+                                : 'Step 2 — Approve WBNB to router'),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1130,6 +1190,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                   ],
+                );
+                  },
                 );
               },
             ),

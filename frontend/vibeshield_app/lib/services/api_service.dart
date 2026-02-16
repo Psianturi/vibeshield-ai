@@ -168,6 +168,27 @@ class ApiService {
     throw Exception('Failed to load agent config: $err');
   }
 
+  Future<AgentDemoStatus?> getAgentDemoStatus({
+    required String userAddress,
+  }) async {
+    final response = await _dio.get(
+      '/vibe/agent-demo/status',
+      queryParameters: {'userAddress': userAddress},
+    );
+    final data = response.data;
+    if (data is Map<String, dynamic> && data['ok'] == true) {
+      final status = data['status'];
+      if (status is Map) {
+        return AgentDemoStatus.fromJson(status.cast<String, dynamic>());
+      }
+    }
+
+    final err = (data is Map && data['error'] != null)
+        ? data['error'].toString()
+        : 'Invalid response';
+    throw Exception('Failed to load agent status: $err');
+  }
+
   Future<Map<String, dynamic>> executeAgentProtection({
     required String userAddress,
     required String amountWbnb,

@@ -24,6 +24,10 @@ const ROUTER_ABI = [
   'function executor() external view returns (address)',
 ];
 
+const ERC20_ABI = [
+  'function allowance(address owner, address spender) external view returns (uint256)',
+];
+
 export class AgentDemoService {
   private provider?: ethers.JsonRpcProvider;
   private wallet?: ethers.Wallet;
@@ -355,5 +359,78 @@ export class AgentDemoService {
     } catch (error: any) {
       return { success: false, error: error?.message || 'Execution failed' };
     }
+  }
+
+  async getUserStatus(userAddress: string): Promise<{
+    chainId: number | null;
+    userAddress: string;
+    isAgentActive: boolean;
+    strategy: number;
+    allowanceWei: string;
+    statusError: string | null;
+  }> {
+    const resolved = this.resolveAddresses();
+    let { registry, router, wbnb } = resolved.selected;
+    const { chainId } = resolved;
+
+    if (!ethers.isAddress(userAddress)) {
+      throw new Error('Invalid userAddress');
+    }
+
+    let isAgentActive = false;
+    let strategy = 0;
+    let allowanceWei = '0';
+    let statusError: string | null = null;
+
+    const rpcUrl = this.rpcUrl;
+    if (!rpcUrl) {
+      statusError =
+        'Missing RPC URL (set AGENT_DEMO_RPC_URL, BSC_TESTNET_RPC_URL, or EVM_RPC_URL)';
+      return {
+        chainId,
+        userAddress,
+        isAgentActive,
+        strategy,
+        allowanceWei,
+        statusError,
+      };
+    }
+
+    try {
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const selectedResult = await this.selectUsableAddresses(
+        provider,
+        chainId,
+        resolved.selected,
+        resolved.fallbackFromDeployment,
+      );
+      registry = selectedResult.selected.registry;
+      router = selectedResult.selected.router;
+      wbnb = selectedResult.selected.wbnb;
+
+      const reg = new ethers.Contract(registry, REGISTRY_ABI, provider);
+      const agent = await reg.getAgent(userAddress);
+      isAgentActive = Boolean(agent?.[0]);
+      strategy = Number(agent?.[1] ?? 0);
+
+      const token = new ethers.Contract(wbnb, ERC20_ABI, provider);
+      const allowance = await token.allowance(userAddress, router);
+      allowanceWei = (typeof allowance === 'bigint' ? allowance : BigInt(String(allowance))).toString();
+
+      if (selectedResult.warning) {
+        statusError = selectedResult.warning;
+      }
+    } catch (e: any) {
+      statusError = e?.message || String(e);
+    }
+
+    return {
+      chainId,
+      userAddress,
+      isAgentActive,
+      strategy,
+      allowanceWei,
+      statusError,
+    };
   }
 }

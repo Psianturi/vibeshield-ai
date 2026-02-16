@@ -44,6 +44,43 @@ class AgentDemoConfig {
   }
 }
 
+class AgentDemoStatus {
+  final int? chainId;
+  final String userAddress;
+  final bool isAgentActive;
+  final int strategy;
+  final BigInt allowanceWei;
+  final String? statusError;
+
+  const AgentDemoStatus({
+    required this.chainId,
+    required this.userAddress,
+    required this.isAgentActive,
+    required this.strategy,
+    required this.allowanceWei,
+    this.statusError,
+  });
+
+  bool get hasApproval => allowanceWei > BigInt.zero;
+
+  factory AgentDemoStatus.fromJson(Map<String, dynamic> json) {
+    BigInt allowance = BigInt.zero;
+    final rawAllowance = json['allowanceWei'];
+    if (rawAllowance != null) {
+      allowance = BigInt.tryParse(rawAllowance.toString().trim()) ?? BigInt.zero;
+    }
+
+    return AgentDemoStatus(
+      chainId: json['chainId'] is num ? (json['chainId'] as num).toInt() : null,
+      userAddress: (json['userAddress'] ?? '').toString(),
+      isAgentActive: json['isAgentActive'] == true,
+      strategy: json['strategy'] is num ? (json['strategy'] as num).toInt() : 0,
+      allowanceWei: allowance,
+      statusError: json['statusError']?.toString(),
+    );
+  }
+}
+
 class AgentDemoTxBuilder {
   static const _registryAbi = [
     {

@@ -117,6 +117,20 @@ router.get('/agent-demo/config', async (req, res) => {
   }
 });
 
+router.get('/agent-demo/status', async (req, res) => {
+  try {
+    const userAddress = String(req.query.userAddress || '').trim();
+    if (!userAddress) {
+      return res.status(400).json({ ok: false, error: 'Missing userAddress query param' });
+    }
+
+    const status = await getAgentDemo().getUserStatus(userAddress);
+    return res.json({ ok: true, status });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 router.post('/agent-demo/execute-protection', requireApiAuth, async (req, res) => {
   try {
     const { userAddress, amountWbnb } = req.body;
