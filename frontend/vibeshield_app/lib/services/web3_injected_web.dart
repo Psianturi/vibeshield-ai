@@ -24,9 +24,40 @@ class Web3Injected {
       payload['params'] = params;
     }
 
-    return js_util.promiseToFuture(
-      js_util.callMethod(ethereum, 'request', [js_util.jsify(payload)]),
-    );
+    try {
+      return await js_util.promiseToFuture(
+        js_util.callMethod(ethereum, 'request', [js_util.jsify(payload)]),
+      );
+    } catch (e) {
+      // MetaMask errors often arrive as JS objects; default toString can become
+      // "[object Object]" which is not actionable.
+      String? msg;
+      try {
+        if (e is Object && js_util.hasProperty(e, 'message')) {
+          final m = js_util.getProperty(e, 'message');
+          if (m is String && m.trim().isNotEmpty) msg = m.trim();
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      int? code;
+      try {
+        if (e is Object && js_util.hasProperty(e, 'code')) {
+          final c = js_util.getProperty(e, 'code');
+          if (c is num) code = c.toInt();
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      final fallback = e.toString();
+      final safeMsg = (msg != null && msg.isNotEmpty)
+          ? msg
+          : (fallback == '[object Object]' ? 'Wallet request failed.' : fallback);
+
+      throw Exception(code == null ? safeMsg : '$safeMsg (code: $code)');
+    }
   }
 
   Future<List<String>> requestAccounts() async {

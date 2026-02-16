@@ -84,7 +84,7 @@ class WalletService {
 
       final apiBaseUrl = AppConfig.apiBaseUrl.trim();
       final parsed = Uri.tryParse(apiBaseUrl);
-        final origin = (parsed != null && parsed.hasScheme && parsed.hasAuthority)
+      final origin = (parsed != null && parsed.hasScheme && parsed.hasAuthority)
           ? '${parsed.scheme}://${parsed.authority}'
           : '';
 
@@ -194,7 +194,6 @@ class WalletService {
 
   Future<String?> connectInjected() async {
     _lastError = null;
-    await init();
     return _attemptInjectedConnect();
   }
 

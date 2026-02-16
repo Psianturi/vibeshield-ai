@@ -119,8 +119,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       context: context,
       builder: (context) {
         Future<void> runConnect(Future<void> Function() action) async {
-          Navigator.of(context, rootNavigator: true).pop();
           await action();
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop();
+          }
         }
 
         return AlertDialog(
@@ -148,6 +150,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       },
     );
+
+    final err = ref.read(walletProvider).error;
+    if (err != null && err.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   static const List<Map<String, String>> _coinGeckoPresets = [

@@ -24,8 +24,10 @@ class WalletButton extends ConsumerWidget {
       context: context,
       builder: (context) {
         Future<void> runConnect(Future<void> Function() action) async {
-          Navigator.of(context, rootNavigator: true).pop();
           await action();
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop();
+          }
         }
 
         return AlertDialog(
