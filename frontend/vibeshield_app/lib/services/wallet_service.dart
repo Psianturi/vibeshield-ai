@@ -84,9 +84,10 @@ class WalletService {
 
       final apiBaseUrl = AppConfig.apiBaseUrl.trim();
       final parsed = Uri.tryParse(apiBaseUrl);
-      final origin = (parsed != null && parsed.hasScheme && parsed.hasAuthority)
+        final origin = (parsed != null && parsed.hasScheme && parsed.hasAuthority)
           ? '${parsed.scheme}://${parsed.authority}'
           : '';
+
 
       String joinUrl(String base, String path) {
         final b =
@@ -382,8 +383,6 @@ class WalletService {
 
       _connectionController.add(true);
       return _currentAddress;
-    }
-
     }
 
   Future<void> disconnect() async {
