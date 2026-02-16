@@ -20,6 +20,8 @@ class WalletService {
 
   final _connectionController = StreamController<bool>.broadcast();
   Stream<bool> get connectionStream => _connectionController.stream;
+  final _wcUriController = StreamController<Uri>.broadcast();
+  Stream<Uri> get wcUriStream => _wcUriController.stream;
 
   WalletService._();
 
@@ -144,6 +146,8 @@ class WalletService {
               'personal_sign',
               'eth_chainId',
               'eth_accounts',
+              'wallet_switchEthereumChain',
+              'wallet_addEthereumChain',
             ],
             events: const ['chainChanged', 'accountsChanged'],
           ),
@@ -153,7 +157,7 @@ class WalletService {
       final Uri? uri = response.uri;
       if (uri != null) {
         if (kIsWeb) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          _wcUriController.add(uri);
         } else {
           // Launch wc: URI first to let Android route to the correct wallet.
           final encoded = Uri.encodeComponent(uri.toString());
@@ -202,6 +206,17 @@ class WalletService {
         _lastError = 'WalletConnect session approved, but no address found.';
         await disconnect();
         return null;
+      }
+
+      if (_sessionChainId != AppConfig.chainId) {
+        final ok = await _ensureChain(AppConfig.chainId);
+        if (!ok) {
+          _lastError = _lastError ??
+              'Network is not supported in the wallet. Please add/switch to the configured network and try again.';
+          await disconnect();
+          return null;
+        }
+        _sessionChainId = AppConfig.chainId;
       }
 
       _connectionController.add(true);
@@ -299,6 +314,115 @@ class WalletService {
     _connectionController.add(false);
   }
 
+  Future<bool> _ensureChain(int chainId) async {
+    if (_appKit == null || _session == null) return false;
+
+    final hexChainId = _toHexChainId(chainId);
+    final chainParams = _chainParams(chainId);
+
+    try {
+      await _appKit!.request(
+        topic: _session!.topic,
+        chainId: 'eip155:$chainId',
+        request: SessionRequestParams(
+          method: 'wallet_switchEthereumChain',
+          params: [
+            {'chainId': hexChainId}
+          ],
+        ),
+      );
+      return true;
+    } catch (e) {
+      final raw = e.toString();
+      final needsAdd = raw.contains('4902') ||
+          raw.toLowerCase().contains('unrecognized') ||
+          raw.toLowerCase().contains('unknown chain');
+
+      if (!needsAdd || chainParams == null) {
+        _lastError = raw;
+        return false;
+      }
+
+      try {
+        await _appKit!.request(
+          topic: _session!.topic,
+          chainId: 'eip155:$chainId',
+          request: SessionRequestParams(
+            method: 'wallet_addEthereumChain',
+            params: [chainParams],
+          ),
+        );
+
+        await _appKit!.request(
+          topic: _session!.topic,
+          chainId: 'eip155:$chainId',
+          request: SessionRequestParams(
+            method: 'wallet_switchEthereumChain',
+            params: [
+              {'chainId': hexChainId}
+            ],
+          ),
+        );
+        return true;
+      } catch (err) {
+        _lastError = err.toString();
+        return false;
+      }
+    }
+  }
+
+  String _toHexChainId(int chainId) => '0x${chainId.toRadixString(16)}';
+
+  String _normalizeExplorerBase(String url) {
+    var out = url.trim();
+    if (out.endsWith('/tx/')) out = out.substring(0, out.length - 4);
+    if (out.endsWith('/tx')) out = out.substring(0, out.length - 3);
+    return out;
+  }
+
+  Map<String, dynamic>? _chainParams(int chainId) {
+    final rpcUrl = AppConfig.rpcUrl.trim();
+    final explorerBase = _normalizeExplorerBase(AppConfig.explorerTxBaseUrl);
+
+    if (chainId == 97) {
+      return {
+        'chainId': _toHexChainId(chainId),
+        'chainName': 'BSC Testnet',
+        'rpcUrls': rpcUrl.isNotEmpty
+            ? [rpcUrl]
+            : ['https://bsc-testnet-rpc.publicnode.com'],
+        'nativeCurrency': {
+          'name': 'tBNB',
+          'symbol': 'tBNB',
+          'decimals': 18,
+        },
+        'blockExplorerUrls': explorerBase.isNotEmpty
+            ? [explorerBase]
+            : ['https://testnet.bscscan.com'],
+      };
+    }
+
+    if (chainId == 56) {
+      return {
+        'chainId': _toHexChainId(chainId),
+        'chainName': 'BNB Chain',
+        'rpcUrls': rpcUrl.isNotEmpty
+            ? [rpcUrl]
+            : ['https://bsc-dataseed.binance.org'],
+        'nativeCurrency': {
+          'name': 'BNB',
+          'symbol': 'BNB',
+          'decimals': 18,
+        },
+        'blockExplorerUrls': explorerBase.isNotEmpty
+            ? [explorerBase]
+            : ['https://bscscan.com'],
+      };
+    }
+
+    return null;
+  }
+
   Future<String?> signMessage(String message) async {
     if (_session == null || _appKit == null || _currentAddress == null) {
       throw Exception('Wallet not connected');
@@ -381,5 +505,6 @@ class WalletService {
     _appKit?.onSessionConnect.unsubscribe(_onSessionConnect);
     _appKit?.onSessionDelete.unsubscribe(_onSessionDelete);
     _connectionController.close();
+    _wcUriController.close();
   }
 }

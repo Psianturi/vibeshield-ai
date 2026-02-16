@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/vibe_provider.dart';
 import '../../providers/wallet_provider.dart';
@@ -30,6 +32,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _agentAmountController = TextEditingController(text: '0.01');
   final _tokenIdFocusNode = FocusNode();
   final _tokenAddressFocusNode = FocusNode();
+  StreamSubscription<Uri>? _wcUriSub;
+  bool _wcDialogOpen = false;
 
   bool _isSwapping = false;
   bool _agentBusy = false;
@@ -42,6 +46,59 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(insights.multiTokenProvider.notifier).fetchAll();
+    });
+
+    if (kIsWeb) {
+      final walletService = ref.read(walletServiceProvider);
+      _wcUriSub = walletService.wcUriStream.listen(_showWalletConnectQr);
+    }
+  }
+
+  void _showWalletConnectQr(Uri uri) {
+    if (!mounted || _wcDialogOpen) return;
+    _wcDialogOpen = true;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        final wcUrl = Uri.parse(
+          'https://walletconnect.com/wc?uri=${Uri.encodeComponent(uri.toString())}',
+        );
+
+        return AlertDialog(
+          title: const Text('Connect Wallet'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              QrImageView(
+                data: uri.toString(),
+                size: 220,
+                backgroundColor: Colors.white,
+              ),
+              const SizedBox(height: 12),
+              SelectableText(
+                uri.toString(),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await launchUrl(wcUrl, mode: LaunchMode.externalApplication);
+              },
+              child: const Text('Open WalletConnect'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    ).whenComplete(() {
+      _wcDialogOpen = false;
     });
   }
 
@@ -284,6 +341,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _agentAmountController.dispose();
     _tokenIdFocusNode.dispose();
     _tokenAddressFocusNode.dispose();
+    _wcUriSub?.cancel();
     super.dispose();
   }
 
