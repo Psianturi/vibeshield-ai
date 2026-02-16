@@ -10,6 +10,7 @@ class AgentDemoConfig {
   final String wbnb;
   final String musdt;
   final BigInt? creationFeeWei;
+  final String? configError;
 
   const AgentDemoConfig({
     required this.chainId,
@@ -18,6 +19,7 @@ class AgentDemoConfig {
     required this.wbnb,
     required this.musdt,
     required this.creationFeeWei,
+    this.configError,
   });
 
   factory AgentDemoConfig.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,7 @@ class AgentDemoConfig {
       wbnb: (json['wbnb'] ?? '').toString(),
       musdt: (json['musdt'] ?? '').toString(),
       creationFeeWei: fee,
+      configError: json['configError']?.toString(),
     );
   }
 }

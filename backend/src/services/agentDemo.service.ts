@@ -151,25 +151,37 @@ export class AgentDemoService {
     musdt: string;
     creationFeeWei: string | null;
     routerExecutor: string | null;
+    configError: string | null;
   }> {
     const { chainId, registry, router, wbnb, musdt } = this.resolveAddresses();
 
     let creationFeeWei: string | null = null;
     let routerExecutor: string | null = null;
+    let configError: string | null = null;
 
-    try {
-      const wallet = this.getWallet();
-      const reg = new ethers.Contract(registry, REGISTRY_ABI, wallet);
-      const fee: bigint = await reg.creationFee();
-      creationFeeWei = fee.toString();
+    // Use read-only provider 
+    const rpcUrl = this.rpcUrl;
+    if (!rpcUrl) {
+      configError = 'Missing RPC URL (set AGENT_DEMO_RPC_URL or EVM_RPC_URL)';
+      console.error('[AgentDemo] getPublicConfig:', configError);
+    } else {
+      try {
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const reg = new ethers.Contract(registry, REGISTRY_ABI, provider);
+        const fee: bigint = await reg.creationFee();
+        creationFeeWei = fee.toString();
+        console.log('[AgentDemo] creationFee loaded:', creationFeeWei);
 
-      const r = new ethers.Contract(router, ROUTER_ABI, wallet);
-      const ex: string = await r.executor();
-      routerExecutor = ethers.isAddress(ex) ? ex : null;
-    } catch {
+        const r = new ethers.Contract(router, ROUTER_ABI, provider);
+        const ex: string = await r.executor();
+        routerExecutor = ethers.isAddress(ex) ? ex : null;
+      } catch (e: any) {
+        configError = e?.message || String(e);
+        console.error('[AgentDemo] Failed to read contract data:', configError);
+      }
     }
 
-    return { chainId, registry, router, wbnb, musdt, creationFeeWei, routerExecutor };
+    return { chainId, registry, router, wbnb, musdt, creationFeeWei, routerExecutor, configError };
   }
 
   async executeProtection(userAddress: string, amountWbnb: string): Promise<SwapResult> {

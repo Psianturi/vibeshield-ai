@@ -700,6 +700,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                 final feeWei = cfg.creationFeeWei;
                 final feeBnb = formatWeiToBnb(feeWei);
+                final configError = cfg.configError;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -713,6 +714,75 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Text(
                         'creation fee: $feeBnb BNB',
                         style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    if (configError != null && configError.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .errorContainer
+                              .withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Theme.of(context).colorScheme.error,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Config error: $configError',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.error,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else if (feeWei == null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .errorContainer
+                              .withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Theme.of(context).colorScheme.error,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Unable to fetch creation fee. Backend may not have RPC access to BSC Testnet.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.error,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                     const SizedBox(height: 12),
@@ -761,6 +831,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         label: 'Open wallet',
                                         onPressed: () =>
                                             walletService.openWalletApp(),
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                if (feeWei == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Cannot spawn: creation fee is unknown. Backend may not have RPC access.',
                                       ),
                                     ),
                                   );
