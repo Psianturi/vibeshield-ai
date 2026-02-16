@@ -68,6 +68,14 @@ class Web3Injected {
     return const <String>[];
   }
 
+  Future<List<String>> getAccounts() async {
+    final result = await _request('eth_accounts');
+    if (result is List) {
+      return result.whereType<String>().toList(growable: false);
+    }
+    return const <String>[];
+  }
+
   Future<int?> requestChainId() async {
     final result = await _request('eth_chainId');
     if (result is String) {

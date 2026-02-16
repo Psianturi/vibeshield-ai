@@ -114,6 +114,10 @@ Minimum variables for on-chain execution:
 - `PRIVATE_KEY` (guardian key)
 - `VIBEGUARD_VAULT_ADDRESS`
 
+For Agent Demo on BSC Testnet (chain 97), set one of:
+- `AGENT_DEMO_RPC_URL=https://bsc-testnet-dataseed.bnbchain.org`
+- or `BSC_TESTNET_RPC_URL=https://bsc-testnet-dataseed.bnbchain.org`
+
 If you only want the API/healthcheck up, you can leave swap vars unset; `/health` will still work.
 
 ## Tech Stack

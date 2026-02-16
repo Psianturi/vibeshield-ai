@@ -5,6 +5,10 @@ class Web3Injected {
     throw UnsupportedError('Injected wallet is not available on this platform.');
   }
 
+  Future<List<String>> getAccounts() async {
+    throw UnsupportedError('Injected wallet is not available on this platform.');
+  }
+
   Future<int?> requestChainId() async => null;
 
   Future<void> switchChain(int chainId) async {

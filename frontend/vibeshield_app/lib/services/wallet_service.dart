@@ -62,9 +62,31 @@ class WalletService {
       _appKit!.onSessionDelete.subscribe(_onSessionDelete);
 
       await _appKit!.init();
+
+      if (kIsWeb && _injected.isAvailable) {
+        await _restoreInjectedSessionIfAny();
+      }
     } catch (e) {
       _lastError = e.toString();
       debugPrint('Reown AppKit init error: $e');
+    }
+  }
+
+  Future<void> _restoreInjectedSessionIfAny() async {
+    try {
+      final accounts = await _injected.getAccounts();
+      if (accounts.isEmpty) return;
+
+      _currentAddress = accounts.first;
+      _sessionChainId = await _injected.requestChainId();
+      _usingInjected = true;
+      _lastError = null;
+      debugPrint(
+        '[wallet] restored injected session account=${_currentAddress ?? 'n/a'} chainId=${_sessionChainId ?? 'n/a'}',
+      );
+      _connectionController.add(true);
+    } catch (e) {
+      debugPrint('[wallet] injected restore failed: $e');
     }
   }
 

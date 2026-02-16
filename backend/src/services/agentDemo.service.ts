@@ -37,6 +37,8 @@ export class AgentDemoService {
     // even if the rest of the backend is configured for a different chain.
     this.rpcUrl =
       process.env.AGENT_DEMO_RPC_URL ||
+      process.env.BSC_TESTNET_RPC_URL ||
+      'https://bsc-testnet-dataseed.bnbchain.org' ||
       process.env.EVM_RPC_URL ||
       process.env.BSC_RPC_URL ||
       '';
@@ -163,7 +165,7 @@ export class AgentDemoService {
     const actual = Number(net.chainId);
     if (actual !== expectedChainId) {
       throw new Error(
-        `RPC network mismatch. Expected chainId ${expectedChainId} but RPC is chainId ${actual}. Set AGENT_DEMO_RPC_URL to a BSC Testnet RPC.`,
+        `RPC network mismatch. Expected chainId ${expectedChainId} but RPC is chainId ${actual}. Set AGENT_DEMO_RPC_URL or BSC_TESTNET_RPC_URL to a BSC Testnet RPC (e.g. https://bsc-testnet-dataseed.bnbchain.org).`,
       );
     }
   }
@@ -274,7 +276,7 @@ export class AgentDemoService {
     // Use read-only provider 
     const rpcUrl = this.rpcUrl;
     if (!rpcUrl) {
-      configError = 'Missing RPC URL (set AGENT_DEMO_RPC_URL or EVM_RPC_URL)';
+      configError = 'Missing RPC URL (set AGENT_DEMO_RPC_URL, BSC_TESTNET_RPC_URL, or EVM_RPC_URL)';
       console.error('[AgentDemo] getPublicConfig:', configError);
     } else {
       try {
