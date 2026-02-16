@@ -17,7 +17,6 @@ type AgentDemoDeployment = {
 
 const REGISTRY_ABI = [
   'function getAgent(address user) external view returns (bool isActive, uint8 strategy)',
-  'function creationFee() external view returns (uint256)',
 ];
 
 const ROUTER_ABI = [
@@ -94,18 +93,31 @@ export class AgentDemoService {
 
   private resolveAddresses(): {
     chainId: number | null;
-    registry: string;
-    router: string;
-    wbnb: string;
-    musdt: string;
+    selected: {
+      registry: string;
+      router: string;
+      wbnb: string;
+      musdt: string;
+    };
+    fallbackFromDeployment: {
+      registry: string;
+      router: string;
+      wbnb: string;
+      musdt: string;
+    } | null;
     executorFromFile?: string;
   } {
     const dep = this.loadDeployment();
 
-    const registry = String(process.env.AGENT_DEMO_REGISTRY_ADDRESS || dep.VibeShieldRegistry || '').trim();
-    const router = String(process.env.AGENT_DEMO_ROUTER_ADDRESS || dep.VibeShieldRouter || '').trim();
-    const wbnb = String(process.env.AGENT_DEMO_WBNB_ADDRESS || dep.wbnb || '').trim();
-    const musdt = String(process.env.AGENT_DEMO_MUSDT_ADDRESS || dep.MockUSDT || '').trim();
+    const depRegistry = String(dep.VibeShieldRegistry || '').trim();
+    const depRouter = String(dep.VibeShieldRouter || '').trim();
+    const depWbnb = String(dep.wbnb || '').trim();
+    const depMusdt = String(dep.MockUSDT || '').trim();
+
+    const registry = String(process.env.AGENT_DEMO_REGISTRY_ADDRESS || depRegistry).trim();
+    const router = String(process.env.AGENT_DEMO_ROUTER_ADDRESS || depRouter).trim();
+    const wbnb = String(process.env.AGENT_DEMO_WBNB_ADDRESS || depWbnb).trim();
+    const musdt = String(process.env.AGENT_DEMO_MUSDT_ADDRESS || depMusdt).trim();
     const chainId = dep.network?.chainId != null ? Number(dep.network.chainId) : null;
 
     if (!ethers.isAddress(registry)) throw new Error('Invalid or missing VibeShieldRegistry address');
@@ -113,7 +125,33 @@ export class AgentDemoService {
     if (!ethers.isAddress(wbnb)) throw new Error('Invalid or missing WBNB address');
     if (!ethers.isAddress(musdt)) throw new Error('Invalid or missing MockUSDT address');
 
-    return { chainId, registry, router, wbnb, musdt, executorFromFile: dep.executor };
+    const deploymentSetValid =
+      ethers.isAddress(depRegistry) &&
+      ethers.isAddress(depRouter) &&
+      ethers.isAddress(depWbnb) &&
+      ethers.isAddress(depMusdt);
+
+    const hasOverrides =
+      Boolean(String(process.env.AGENT_DEMO_REGISTRY_ADDRESS || '').trim()) ||
+      Boolean(String(process.env.AGENT_DEMO_ROUTER_ADDRESS || '').trim()) ||
+      Boolean(String(process.env.AGENT_DEMO_WBNB_ADDRESS || '').trim()) ||
+      Boolean(String(process.env.AGENT_DEMO_MUSDT_ADDRESS || '').trim());
+
+    const fallbackFromDeployment = hasOverrides && deploymentSetValid
+      ? {
+          registry: depRegistry,
+          router: depRouter,
+          wbnb: depWbnb,
+          musdt: depMusdt,
+        }
+      : null;
+
+    return {
+      chainId,
+      selected: { registry, router, wbnb, musdt },
+      fallbackFromDeployment,
+      executorFromFile: dep.executor,
+    };
   }
 
   private async assertRpcMatchesDeployment(
@@ -143,6 +181,77 @@ export class AgentDemoService {
     }
   }
 
+  private async selectUsableAddresses(
+    provider: ethers.Provider,
+    chainId: number | null,
+    selected: { registry: string; router: string; wbnb: string; musdt: string },
+    fallbackFromDeployment: {
+      registry: string;
+      router: string;
+      wbnb: string;
+      musdt: string;
+    } | null,
+  ): Promise<{
+    selected: { registry: string; router: string; wbnb: string; musdt: string };
+    warning: string | null;
+  }> {
+    await this.assertRpcMatchesDeployment(provider, chainId);
+
+    const ensureContracts = async (set: { registry: string; router: string }) => {
+      await this.assertContractDeployed(provider, set.registry, 'Registry');
+      await this.assertContractDeployed(provider, set.router, 'Router');
+    };
+
+    try {
+      await ensureContracts(selected);
+      return { selected, warning: null };
+    } catch (primaryErr: any) {
+      if (!fallbackFromDeployment) throw primaryErr;
+
+      await ensureContracts(fallbackFromDeployment);
+      return {
+        selected: fallbackFromDeployment,
+        warning: `Primary AGENT_DEMO_* addresses failed validation. Using deployment file addresses instead. Cause: ${primaryErr?.message || primaryErr}`,
+      };
+    }
+  }
+
+  private async readCreationFeeWei(
+    provider: ethers.Provider,
+    registryAddress: string,
+  ): Promise<string> {
+    const probes: Array<{ abi: string[]; method: string }> = [
+      {
+        abi: ['function creationFee() external view returns (uint256)'],
+        method: 'creationFee',
+      },
+      {
+        abi: ['function fee() external view returns (uint256)'],
+        method: 'fee',
+      },
+      {
+        abi: ['function getCreationFee() external view returns (uint256)'],
+        method: 'getCreationFee',
+      },
+    ];
+
+    let lastErr: any = null;
+    for (const probe of probes) {
+      try {
+        const reg = new ethers.Contract(registryAddress, probe.abi, provider);
+        const raw = await (reg as any)[probe.method]();
+        const asBigInt = typeof raw === 'bigint' ? raw : BigInt(String(raw));
+        return asBigInt.toString();
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    throw new Error(
+      `Unable to read registry creation fee at ${registryAddress}. ${lastErr?.message || lastErr}`,
+    );
+  }
+
   async getPublicConfig(): Promise<{
     chainId: number | null;
     registry: string;
@@ -153,7 +262,10 @@ export class AgentDemoService {
     routerExecutor: string | null;
     configError: string | null;
   }> {
-    const { chainId, registry, router, wbnb, musdt } = this.resolveAddresses();
+    const resolved = this.resolveAddresses();
+    let { selected } = resolved;
+    let { registry, router, wbnb, musdt } = selected;
+    const { chainId } = resolved;
 
     let creationFeeWei: string | null = null;
     let routerExecutor: string | null = null;
@@ -167,14 +279,28 @@ export class AgentDemoService {
     } else {
       try {
         const provider = new ethers.JsonRpcProvider(rpcUrl);
-        const reg = new ethers.Contract(registry, REGISTRY_ABI, provider);
-        const fee: bigint = await reg.creationFee();
-        creationFeeWei = fee.toString();
+        const selectedResult = await this.selectUsableAddresses(
+          provider,
+          chainId,
+          resolved.selected,
+          resolved.fallbackFromDeployment,
+        );
+        selected = selectedResult.selected;
+        registry = selected.registry;
+        router = selected.router;
+        wbnb = selected.wbnb;
+        musdt = selected.musdt;
+
+        creationFeeWei = await this.readCreationFeeWei(provider, registry);
         console.log('[AgentDemo] creationFee loaded:', creationFeeWei);
 
         const r = new ethers.Contract(router, ROUTER_ABI, provider);
         const ex: string = await r.executor();
         routerExecutor = ethers.isAddress(ex) ? ex : null;
+
+        if (selectedResult.warning) {
+          configError = selectedResult.warning;
+        }
       } catch (e: any) {
         configError = e?.message || String(e);
         console.error('[AgentDemo] Failed to read contract data:', configError);
@@ -186,7 +312,8 @@ export class AgentDemoService {
 
   async executeProtection(userAddress: string, amountWbnb: string): Promise<SwapResult> {
     try {
-      const { chainId, registry, router } = this.resolveAddresses();
+      const resolved = this.resolveAddresses();
+      const { chainId } = resolved;
 
       if (!ethers.isAddress(userAddress)) {
         return { success: false, error: 'Invalid userAddress' };
@@ -198,13 +325,19 @@ export class AgentDemoService {
       }
 
       const wallet = this.getWallet();
+      const provider = wallet.provider!;
+
+      const selectedResult = await this.selectUsableAddresses(
+        provider,
+        chainId,
+        resolved.selected,
+        resolved.fallbackFromDeployment,
+      );
+      const registry = selectedResult.selected.registry;
+      const router = selectedResult.selected.router;
 
       // Make failures actionable: validate RPC matches the deployment and that
       // contract bytecode exists at the configured addresses.
-      await this.assertRpcMatchesDeployment(wallet.provider!, chainId);
-      await this.assertContractDeployed(wallet.provider!, registry, 'Registry');
-      await this.assertContractDeployed(wallet.provider!, router, 'Router');
-
       const reg = new ethers.Contract(registry, REGISTRY_ABI, wallet);
       const agent = await reg.getAgent(userAddress);
       const isActive = Boolean(agent?.[0]);
