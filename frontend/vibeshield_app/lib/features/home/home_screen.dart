@@ -722,21 +722,90 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       formatWeiToBnb(status?.backendWbnbWei);
                     final canExecuteByBalance =
                       status == null || status.userWbnbWei > BigInt.zero;
+                    final isReady = step1Done && step2Done;
+
+                    Future<void> topUpDemoWbnb() async {
+                      setState(() {
+                        _agentBusy = true;
+                        _agentBusyAction = 'topup';
+                      });
+                      try {
+                        final topup = await runWithBlockingDialog<
+                            AgentDemoTopUpResult>(
+                          title: 'Funding demo WBNB',
+                          message:
+                              'Requesting demo WBNB top-up to your wallet. Please wait…',
+                          action: () => api.topUpAgentDemoWbnb(
+                            userAddress: userAddress,
+                          ),
+                        );
+
+                        if (!mounted || topup == null) return;
+                        if (!topup.success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                topup.error ?? 'Failed to top up demo WBNB.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        final amount = formatWeiToBnb(topup.amountWei);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Demo top-up sent: ${amount.isEmpty ? 'WBNB funded' : '$amount WBNB funded'}',
+                            ),
+                          ),
+                        );
+                        refreshAgentStatus();
+                      } finally {
+                        if (mounted) {
+                          setState(() {
+                            _agentBusy = false;
+                            _agentBusyAction = null;
+                          });
+                        }
+                      }
+                    }
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    Text(
-                      'Network: BSC Testnet',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (feeBnb.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Activation fee: $feeBnb BNB',
-                        style: Theme.of(context).textTheme.bodySmall,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.20),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isReady
+                                ? '🟢 Agent Active'
+                                : '⚠️ Agent Setup Required',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            isReady
+                                ? 'Guardian is monitoring your wallet 24/7. Use Manual Override only for demo simulation.'
+                                : 'Complete setup in 2 steps: Activate agent and approve WBNB.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
                     if (configError != null && configError.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Container(
@@ -808,7 +877,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ],
                     const SizedBox(height: 12),
                     Text(
-                      'Setup: 1) Activate agent → 2) Approve WBNB → 3) Protection ready',
+                      'Network: BSC Testnet${feeBnb.isEmpty ? '' : ' • Activation fee: $feeBnb BNB'}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     if (statusSnap.connectionState == ConnectionState.waiting) ...[
@@ -819,86 +888,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ] else if (status != null) ...[
                       const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
                           Text(
-                            step1Done
-                                ? '✅ Agent active'
-                                : '⏳ Agent not active yet',
+                            step1Done ? '✅ Agent active' : '⏳ Agent pending',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          const SizedBox(height: 4),
                           Text(
                             step2Done
                                 ? '✅ WBNB approved'
-                                : '⏳ WBNB approval pending',
+                                : '⏳ Approval pending',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
-                        'Your WBNB: ${userWbnbBnb.isEmpty ? '0' : userWbnbBnb} | Demo faucet WBNB: ${backendWbnbBnb.isEmpty ? '0' : backendWbnbBnb}',
+                        'Your WBNB: ${userWbnbBnb.isEmpty ? '0' : userWbnbBnb} | Demo faucet: ${backendWbnbBnb.isEmpty ? '0' : backendWbnbBnb}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: _agentBusy
-                              ? null
-                              : () async {
-                                  setState(() {
-                                    _agentBusy = true;
-                                    _agentBusyAction = 'topup';
-                                  });
-                                  try {
-                                    final topup = await runWithBlockingDialog<
-                                        AgentDemoTopUpResult>(
-                                      title: 'Funding demo WBNB',
-                                      message:
-                                          'Requesting demo WBNB top-up to your wallet. Please wait…',
-                                      action: () =>
-                                          api.topUpAgentDemoWbnb(
-                                        userAddress: userAddress,
-                                      ),
-                                    );
-
-                                    if (!mounted || topup == null) return;
-                                    if (!topup.success) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            topup.error ??
-                                                'Failed to top up demo WBNB.',
-                                          ),
-                                        ),
-                                      );
-                                      return;
-                                    }
-
-                                    final amount =
-                                        formatWeiToBnb(topup.amountWei);
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Demo top-up sent: ${amount.isEmpty ? 'WBNB funded' : '$amount WBNB funded'}',
-                                        ),
-                                      ),
-                                    );
-                                    refreshAgentStatus();
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() {
-                                        _agentBusy = false;
-                                        _agentBusyAction = null;
-                                      });
-                                    }
-                                  }
-                                },
+                          onPressed: _agentBusy ? null : topUpDemoWbnb,
                           icon: (_agentBusy && _agentBusyAction == 'topup')
                               ? const SizedBox(
                                   height: 14,
@@ -908,13 +923,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ),
                                 )
                               : const Icon(Icons.water_drop_outlined),
-                          label: const Text('Get demo WBNB'),
+                          label: const Text('💧 Top-up WBNB'),
                         ),
                       ),
                       if (!canExecuteByBalance) ...[
                         const SizedBox(height: 4),
                         Text(
-                          'Execute needs WBNB balance > 0. Use "Get demo WBNB" first.',
+                          'Execute needs WBNB balance > 0. Use "Top-up Demo WBNB" first.',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -928,151 +943,166 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ],
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Text('Strategy:'),
-                        const SizedBox(width: 12),
-                        DropdownButton<int>(
-                          value: _selectedStrategy,
-                          items: const [
-                            DropdownMenuItem(value: 1, child: Text('Tight')),
-                            DropdownMenuItem(value: 2, child: Text('Loose')),
-                          ],
-                          onChanged: _agentBusy
+
+                    if (!step1Done) ...[
+                      const Text('Step 1 — Choose strategy and activate agent'),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Strategy:'),
+                          const SizedBox(width: 12),
+                          DropdownButton<int>(
+                            value: _selectedStrategy,
+                            items: const [
+                              DropdownMenuItem(value: 1, child: Text('🛡️ Tight')),
+                              DropdownMenuItem(value: 2, child: Text('💎 Loose')),
+                            ],
+                            onChanged: _agentBusy
+                                ? null
+                                : (v) {
+                                    if (v == null) return;
+                                    setState(() => _selectedStrategy = v);
+                                  },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _agentBusy
                               ? null
-                              : (v) {
-                                  if (v == null) return;
-                                  setState(() => _selectedStrategy = v);
-                                },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: (_agentBusy || step1Done)
-                            ? null
-                            : () async {
-                                final requiredChainId =
-                                    cfg.chainId ?? AppConfig.chainId;
-                                final connectedChainId =
-                                    walletService.chainId ?? AppConfig.chainId;
-                                if (connectedChainId != requiredChainId) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
-                                      ),
-                                      action: SnackBarAction(
-                                        label: 'Open wallet',
-                                        onPressed: () =>
-                                            walletService.openWalletApp(),
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                if (feeWei == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Cannot spawn: creation fee is unknown. Backend may not have RPC access.',
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                setState(() {
-                                  _agentBusy = true;
-                                  _agentBusyAction = 'spawn';
-                                });
-                                try {
-                                  debugPrint(
-                                    '[agent] spawn start chain=${cfg.chainId ?? AppConfig.chainId} registry=${cfg.registry} feeWei=${feeWei ?? 'n/a'} strategy=$_selectedStrategy',
-                                  );
-                                  final data =
-                                      AgentDemoTxBuilder.spawnAgentData(
-                                    strategy: _selectedStrategy,
-                                  );
-
-                                  final txHash = await runWithBlockingDialog<
-                                      String?>(
-                                    title: 'Confirm in wallet',
-                                    message:
-                                        'A transaction request was sent. Please open your wallet and confirm the Spawn transaction.',
-                                    showOpenWallet: true,
-                                    action: () => walletService.sendTransaction(
-                                      to: cfg.registry,
-                                      data: data,
-                                      valueWei: feeWei,
-                                    ),
-                                  );
-
-                                  if (!mounted) return;
-                                  if (txHash == null || txHash.isEmpty) {
-                                    final err = walletService.lastError ??
-                                        'No wallet error detail';
-                                    debugPrint('[agent] spawn failed: $err');
+                              : () async {
+                                  final requiredChainId =
+                                      cfg.chainId ?? AppConfig.chainId;
+                                  final connectedChainId =
+                                      walletService.chainId ?? AppConfig.chainId;
+                                  if (connectedChainId != requiredChainId) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text(
-                                          'Spawn was not confirmed in wallet. ($err)',
+                                          'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
+                                        ),
+                                        action: SnackBarAction(
+                                          label: 'Open wallet',
+                                          onPressed: () =>
+                                              walletService.openWalletApp(),
                                         ),
                                       ),
                                     );
                                     return;
                                   }
 
-                                  debugPrint('[agent] spawn txHash=$txHash');
-
-                                  final url = explorerTxUrl(
-                                    txHash,
-                                    chainId: cfg.chainId,
-                                  );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Spawn submitted: $txHash. Waiting confirmation on chain...'),
-                                      action: url.isEmpty
-                                          ? null
-                                          : SnackBarAction(
-                                              label: 'View',
-                                              onPressed: () =>
-                                                  launchUrl(Uri.parse(url)),
-                                            ),
-                                    ),
-                                  );
-                                  refreshAgentStatus();
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _agentBusy = false;
-                                      _agentBusyAction = null;
-                                    });
+                                  if (feeWei == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Cannot spawn: activation fee is unknown.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
                                   }
-                                }
-                              },
-                        child: (_agentBusy && _agentBusyAction == 'spawn')
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(step1Done
-                                ? 'Step 1 — Spawn agent (Done ✅)'
-                                : 'Step 1 — Spawn agent'),
+
+                                  setState(() {
+                                    _agentBusy = true;
+                                    _agentBusyAction = 'spawn';
+                                  });
+                                  try {
+                                    final data = AgentDemoTxBuilder.spawnAgentData(
+                                      strategy: _selectedStrategy,
+                                    );
+
+                                    final txHash = await runWithBlockingDialog<String?>(
+                                      title: 'Confirm in wallet',
+                                      message:
+                                          'Please approve agent activation transaction in wallet.',
+                                      showOpenWallet: true,
+                                      action: () => walletService.sendTransaction(
+                                        to: cfg.registry,
+                                        data: data,
+                                        valueWei: feeWei,
+                                      ),
+                                    );
+
+                                    if (!mounted) return;
+                                    if (txHash == null || txHash.isEmpty) {
+                                      final err = walletService.lastError ??
+                                          'No wallet error detail';
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Spawn not confirmed. ($err)'),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    final url = explorerTxUrl(
+                                      txHash,
+                                      chainId: cfg.chainId,
+                                    );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Agent activated. Tx: $txHash'),
+                                        action: url.isEmpty
+                                            ? null
+                                            : SnackBarAction(
+                                                label: 'View',
+                                                onPressed: () =>
+                                                    launchUrl(Uri.parse(url)),
+                                              ),
+                                      ),
+                                    );
+                                    refreshAgentStatus();
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() {
+                                        _agentBusy = false;
+                                        _agentBusyAction = null;
+                                      });
+                                    }
+                                  }
+                                },
+                          child: (_agentBusy && _agentBusyAction == 'spawn')
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('🛡️ Activate VibeShield'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                    ],
+
+                    if (step1Done && !step2Done) ...[
+                      const Text('Step 2 — Grant WBNB permission'),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Approve WBNB so the agent can protect your funds when triggered.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Text('Strategy:'),
+                          const SizedBox(width: 12),
+                          Text(
+                            _selectedStrategy == 1 ? 'Tight' : 'Loose',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    if (step1Done && !step2Done)
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: (_agentBusy || step2Done)
+                        onPressed: _agentBusy
                             ? null
                             : () async {
                                 final requiredChainId =
@@ -1172,28 +1202,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : Text(step2Done
-                                ? 'Step 2 — Approve WBNB to router (Done ✅)'
-                                : 'Step 2 — Approve WBNB to router'),
+                            : const Text('✅ Approve WBNB'),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _agentAmountController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Amount WBNB to protect',
-                        border: OutlineInputBorder(),
+
+                    if (isReady) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.20),
+                        ),
+                        child: Text(
+                          'Demo Zone: Manual Override\nUse this to simulate a high-risk event during demo.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.tonal(
-                        onPressed: (_agentBusy || !canExecuteByBalance)
-                            ? null
-                            : () async {
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _agentAmountController,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Amount WBNB for simulation',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.tonal(
+                          onPressed: (_agentBusy || !canExecuteByBalance)
+                              ? null
+                              : () async {
                                 final amount =
                                     _agentAmountController.text.trim();
                                 if (amount.isEmpty) {
@@ -1278,17 +1324,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   }
                                 }
                               },
-                        child: (_agentBusy && _agentBusyAction == 'execute')
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Step 3 — Execute protection'),
+                          child: (_agentBusy && _agentBusyAction == 'execute')
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('🚨 Simulate High-Risk Event (Execute)'),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 );
                   },
