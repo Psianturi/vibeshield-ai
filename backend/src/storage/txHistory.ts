@@ -7,6 +7,9 @@ export interface TxHistoryItem {
   txHash: string;
   timestamp: number;
   source: 'monitor' | 'manual' | 'agent';
+  // Optional metadata to make explorers easier to interpret.
+  executorAddress?: string;
+  routerAddress?: string;
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');

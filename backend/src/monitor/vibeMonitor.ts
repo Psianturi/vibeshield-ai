@@ -77,12 +77,25 @@ export async function runMonitorOnce() {
         );
         executed = await getAgentDemo().executeProtection(sub.userAddress, sub.amount);
         if (executed?.success && executed?.txHash) {
+          let routerAddress: string | undefined;
+          let executorAddress: string | undefined;
+          try {
+            const cfg = await getAgentDemo().getPublicConfig();
+            if (cfg?.router && typeof cfg.router === 'string') routerAddress = cfg.router;
+            if (cfg?.routerExecutor && typeof cfg.routerExecutor === 'string') {
+              executorAddress = cfg.routerExecutor;
+            }
+          } catch {
+          }
+
           appendTxHistory({
             userAddress: sub.userAddress,
             tokenAddress: sub.tokenAddress,
             txHash: executed.txHash,
             timestamp: Date.now(),
-            source: 'monitor'
+            source: 'monitor',
+            routerAddress,
+            executorAddress,
           });
           if (injectedContext) {
             demoContextManager.markConsumed(sub.tokenSymbol);

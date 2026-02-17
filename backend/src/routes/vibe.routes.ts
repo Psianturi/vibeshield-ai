@@ -265,12 +265,25 @@ router.post('/agent-demo/execute-protection', async (req, res) => {
     );
 
     if (result?.success && result?.txHash && userAddress) {
+      let tokenAddress = 'WBNB';
+      let routerAddress: string | undefined;
+      let executorAddress: string | undefined;
+      try {
+        const cfg = await getAgentDemo().getPublicConfig();
+        if (cfg?.wbnb && ethers.isAddress(cfg.wbnb)) tokenAddress = cfg.wbnb;
+        if (cfg?.router && typeof cfg.router === 'string') routerAddress = cfg.router;
+        if (cfg?.routerExecutor && typeof cfg.routerExecutor === 'string') executorAddress = cfg.routerExecutor;
+      } catch {
+      }
+
       appendTxHistory({
         userAddress: String(userAddress).trim(),
-        tokenAddress: 'WBNB',
+        tokenAddress,
         txHash: result.txHash,
         timestamp: Date.now(),
-        source: 'agent'
+        source: 'agent',
+        routerAddress,
+        executorAddress,
       });
     }
 
