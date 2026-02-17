@@ -25,8 +25,18 @@ const ROUTER_ABI = [
 ];
 
 const ERC20_ABI = [
+  'function balanceOf(address owner) external view returns (uint256)',
   'function allowance(address owner, address spender) external view returns (uint256)',
 ];
+
+const ROUTER_ERROR_BY_SELECTOR: Record<string, string> = {
+  '0x30cd7471': 'Router error: NotOwner',
+  '0xc32d1d76': 'Router error: NotExecutor (backend wallet is not router executor)',
+  '0x486fcee2': 'Router error: AgentNotActive',
+  '0x05d7702d': 'Router error: NothingToSell (user WBNB balance is zero for selected strategy)',
+  '0x90b8ec18': 'Router error: TransferFailed (check WBNB allowance/balance)',
+  '0xbb55fd27': 'Router error: InsufficientLiquidity (router mUSDT liquidity too low)',
+};
 
 export class AgentDemoService {
   private provider?: ethers.JsonRpcProvider;
@@ -258,6 +268,30 @@ export class AgentDemoService {
     );
   }
 
+  private decodeRouterError(error: any): string | null {
+    const candidates: string[] = [];
+
+    if (error?.data && typeof error.data === 'string') {
+      candidates.push(error.data);
+    }
+    if (error?.info?.error?.data && typeof error.info.error.data === 'string') {
+      candidates.push(error.info.error.data);
+    }
+
+    const raw = String(error?.message || error || '');
+    const match = raw.match(/data="(0x[0-9a-fA-F]+)"/);
+    if (match?.[1]) candidates.push(match[1]);
+
+    for (const hex of candidates) {
+      const selector = hex.slice(0, 10).toLowerCase();
+      if (ROUTER_ERROR_BY_SELECTOR[selector]) {
+        return ROUTER_ERROR_BY_SELECTOR[selector];
+      }
+    }
+
+    return null;
+  }
+
   async getPublicConfig(): Promise<{
     chainId: number | null;
     registry: string;
@@ -341,23 +375,50 @@ export class AgentDemoService {
       );
       const registry = selectedResult.selected.registry;
       const router = selectedResult.selected.router;
+      const wbnb = selectedResult.selected.wbnb;
 
       // Make failures actionable: validate RPC matches the deployment and that
       // contract bytecode exists at the configured addresses.
       const reg = new ethers.Contract(registry, REGISTRY_ABI, wallet);
       const agent = await reg.getAgent(userAddress);
       const isActive = Boolean(agent?.[0]);
+      const strategy = Number(agent?.[1] ?? 0);
       if (!isActive) {
         return { success: false, error: 'Agent not active for this user' };
       }
 
       const amountWei = ethers.parseUnits(String(amountWbnb), 18);
+
+      const token = new ethers.Contract(wbnb, ERC20_ABI, provider);
+      const userBalanceRaw = await token.balanceOf(userAddress);
+      const userBalanceWei =
+        typeof userBalanceRaw === 'bigint'
+          ? userBalanceRaw
+          : BigInt(String(userBalanceRaw));
+
+      let maxSellWei = userBalanceWei;
+      if (strategy === 2) {
+        maxSellWei = userBalanceWei / 2n;
+      }
+
+      if (maxSellWei <= 0n) {
+        return {
+          success: false,
+          error:
+            'Nothing to sell. Your WBNB balance is 0 (or too low for current strategy). Top up WBNB testnet first.',
+        };
+      }
+
       const r = new ethers.Contract(router, ROUTER_ABI, wallet);
       const tx = await r.executeProtection(userAddress, amountWei);
       const receipt = await tx.wait();
       return { success: true, txHash: receipt.hash };
     } catch (error: any) {
-      return { success: false, error: error?.message || 'Execution failed' };
+      const decoded = this.decodeRouterError(error);
+      return {
+        success: false,
+        error: decoded || error?.message || 'Execution failed',
+      };
     }
   }
 
