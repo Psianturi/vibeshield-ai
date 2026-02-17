@@ -727,13 +727,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                     Text(
-                      'chainId: ${cfg.chainId ?? AppConfig.chainId}',
+                      'Network: BSC Testnet',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     if (feeBnb.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'creation fee: $feeBnb BNB',
+                        'Activation fee: $feeBnb BNB',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -808,7 +808,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ],
                     const SizedBox(height: 12),
                     Text(
-                      'Steps: 1) Spawn agent → 2) Approve WBNB → 3) Execute protection',
+                      'Setup: 1) Activate agent → 2) Approve WBNB → 3) Protection ready',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     if (statusSnap.connectionState == ConnectionState.waiting) ...[
@@ -819,23 +819,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ] else if (status != null) ...[
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Chip(
-                            label: Text(
-                              step1Done
-                                  ? '✅ Step 1 done (Agent active)'
-                                  : 'Step 1 pending',
-                            ),
+                          Text(
+                            step1Done
+                                ? '✅ Agent active'
+                                : '⏳ Agent not active yet',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          Chip(
-                            label: Text(
-                              step2Done
-                                  ? '✅ Step 2 done (Approved)'
-                                  : 'Step 2 pending',
-                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            step2Done
+                                ? '✅ WBNB approved'
+                                : '⏳ WBNB approval pending',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),

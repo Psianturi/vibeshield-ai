@@ -92,6 +92,12 @@ vibeshield-ai/
 - **Risk pipeline (API-level):** `/api/vibe/check` calls Cryptoracle + CoinGecko, then sends a prompt to Kalibr and returns `{ sentiment, price, analysis }`.
 - **Non-custodial execution (contract + API):** the backend can call the vault function `executeEmergencySwap(user, token, amountIn)` and returns a `txHash` on success.
 - **Multi-user subscriptions:** `/api/vibe/subscribe`, `/api/vibe/subscriptions`, and `/api/vibe/run-once`.
+- **Agent Demo flow (BSC Testnet):**
+	- Step 1 activate agent (spawn)
+	- Step 2 approve WBNB to router
+	- Step 3 manual override execute protection
+	- On-chain status sync (`agent active`, `approval`, balances) shown in UI.
+	- Built-in demo helper: `Get demo WBNB` (backend wraps/transfers WBNB for demo readiness).
 
 
 
