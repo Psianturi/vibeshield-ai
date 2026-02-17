@@ -94,6 +94,9 @@ This endpoint returns a **transaction hash** (`txHash`) when the on-chain call s
 - Monitor behavior:
   - `MONITOR_AUTO_DISABLE_ON_EXECUTE=false` (default): keep subscription enabled after successful execution.
   - `MONITOR_AUTO_DISABLE_ON_EXECUTE=true`: auto-disable subscription after successful execution.
+  - `MONITOR_AUTO_SUBSCRIBE_FROM_AGENT_STATUS=true` (default): auto-upsert `WBNB` subscription when `/agent-demo/status` sees agent active + allowance > 0.
+  - `MONITOR_DEFAULT_AMOUNT_WBNB=0.01`: default execution amount for auto-created subscription.
+  - `MONITOR_DEFAULT_RISK_THRESHOLD=80`: default monitor threshold for auto-created subscription.
 
 ## Demo Hybrid Trigger
 

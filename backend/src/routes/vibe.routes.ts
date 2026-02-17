@@ -211,7 +211,46 @@ router.get('/agent-demo/status', async (req, res) => {
     }
 
     const status = await getAgentDemo().getUserStatus(userAddress);
-    return res.json({ ok: true, status });
+
+    let autoSubscribed = false;
+    const autoSubEnabled =
+      String(process.env.MONITOR_AUTO_SUBSCRIBE_FROM_AGENT_STATUS || 'true').toLowerCase() ===
+      'true';
+
+    if (autoSubEnabled) {
+      const hasAllowance = (() => {
+        try {
+          return BigInt(String(status.allowanceWei || '0')) > 0n;
+        } catch {
+          return false;
+        }
+      })();
+
+      if (status.isAgentActive && hasAllowance) {
+        const cfg = await getAgentDemo().getPublicConfig();
+        const amount = String(process.env.MONITOR_DEFAULT_AMOUNT_WBNB || '0.01').trim() || '0.01';
+        const riskThresholdRaw = Number(process.env.MONITOR_DEFAULT_RISK_THRESHOLD ?? 80);
+        const riskThreshold = Number.isFinite(riskThresholdRaw) ? riskThresholdRaw : 80;
+
+        if (cfg.wbnb && ethers.isAddress(cfg.wbnb)) {
+          upsertSubscription({
+            userAddress,
+            tokenSymbol: 'WBNB',
+            tokenId: 'binancecoin',
+            tokenAddress: cfg.wbnb,
+            amount,
+            enabled: true,
+            riskThreshold,
+          });
+          autoSubscribed = true;
+          console.log(
+            `[Monitor] auto-subscribed user=${userAddress} token=WBNB amount=${amount} threshold=${riskThreshold}`,
+          );
+        }
+      }
+    }
+
+    return res.json({ ok: true, status, autoSubscribed });
   } catch (error: any) {
     return res.status(500).json({ ok: false, error: error.message });
   }

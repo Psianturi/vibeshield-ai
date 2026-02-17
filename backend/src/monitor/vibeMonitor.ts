@@ -37,8 +37,16 @@ export async function runMonitorOnce() {
   const autoDisableOnExecute =
     String(process.env.MONITOR_AUTO_DISABLE_ON_EXECUTE || 'false').toLowerCase() === 'true';
 
+  console.log(`[MONITOR] cycle started enabledSubs=${subs.length}`);
+  if (!subs.length) {
+    console.log('[MONITOR] no enabled subscriptions; skipping cycle');
+  }
+
   for (const sub of subs) {
     try {
+      console.log(
+        `[MONITOR] processing user=${sub.userAddress} token=${sub.tokenSymbol} threshold=${sub.riskThreshold}`,
+      );
       const [sentiment, price] = await Promise.all([
         getCryptoracle().getSentiment(sub.tokenSymbol),
         getCoingecko().getPrice(sub.tokenId)
@@ -64,6 +72,9 @@ export async function runMonitorOnce() {
 
       let executed: any = null;
       if (analysis.shouldExit && analysis.riskScore >= sub.riskThreshold) {
+        console.log(
+          `[MONITOR] execute condition met user=${sub.userAddress} score=${analysis.riskScore} threshold=${sub.riskThreshold}`,
+        );
         executed = await getAgentDemo().executeProtection(sub.userAddress, sub.amount);
         if (executed?.success && executed?.txHash) {
           appendTxHistory({
@@ -79,11 +90,21 @@ export async function runMonitorOnce() {
           if (autoDisableOnExecute) {
             sub.enabled = false;
           }
+          console.log(`[MONITOR] execution success txHash=${executed.txHash}`);
+        } else {
+          console.log(
+            `[MONITOR] execution failed user=${sub.userAddress} error=${executed?.error || 'unknown error'}`,
+          );
         }
+      } else {
+        console.log(
+          `[MONITOR] no execute user=${sub.userAddress} shouldExit=${analysis.shouldExit} score=${analysis.riskScore} threshold=${sub.riskThreshold}`,
+        );
       }
 
       results.push({ sub, sentiment, price, analysis, executed });
     } catch (e: any) {
+      console.error(`[MONITOR] processing error user=${sub.userAddress}:`, e?.message ?? String(e));
       results.push({ sub, error: e?.message ?? String(e) });
     }
   }
@@ -99,9 +120,16 @@ export async function runMonitorOnce() {
 
 export function startMonitorLoop() {
   const enabled = (process.env.ENABLE_MONITOR || '').toLowerCase() === 'true';
-  if (!enabled) return null;
+  if (!enabled) {
+    console.log('[MONITOR] disabled by ENABLE_MONITOR flag');
+    return null;
+  }
 
   const intervalMs = Number(process.env.MONITOR_INTERVAL_MS ?? 30000);
+  console.log(`[MONITOR] starting loop intervalMs=${intervalMs}`);
+
+  runMonitorOnce().catch((err) => console.error('Monitor bootstrap run failed:', err));
+
   const id = setInterval(() => {
     runMonitorOnce().catch((err) => console.error('Monitor run failed:', err));
   }, intervalMs);
