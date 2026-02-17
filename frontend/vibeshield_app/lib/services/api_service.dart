@@ -253,19 +253,12 @@ class ApiService {
     int? ttlMs,
   }) async {
     final secret = AppConfig.demoInjectionSecret.trim();
-    if (secret.isEmpty) {
-      return const AgentDemoInjectResult(
-        ok: false,
-        error:
-            'Missing DEMO_INJECTION_SECRET in frontend build (--dart-define).',
-      );
-    }
 
     try {
       final response = await _dio.post(
         AppConfig.demoInjectEndpoint,
         data: {
-          'secret': secret,
+          if (secret.isNotEmpty) 'secret': secret,
           'token': token,
           if (type != null && type.isNotEmpty) 'type': type,
           if (headline != null && headline.isNotEmpty) 'headline': headline,

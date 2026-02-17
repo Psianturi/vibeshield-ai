@@ -98,7 +98,7 @@ This endpoint returns a **transaction hash** (`txHash`) when the on-chain call s
   - Injects temporary emergency context (TTL, one-shot) for monitor loop reasoning.
   - Requires:
     - `ENABLE_DEMO_INJECTION=true`
-    - `DEMO_INJECTION_SECRET` in body (`{ secret, token, type? | headline?, severity?, ttlMs? }`)
+    - Optional secret mode: set `DEMO_INJECTION_REQUIRE_SECRET=true` and provide `DEMO_INJECTION_SECRET` in body (`{ secret, token, type? | headline?, severity?, ttlMs? }`)
   - Does **not** execute swap directly. Monitor loop remains the executor.
 - `GET /api/vibe/demo/context`
   - Returns active injected context snapshot (if any).

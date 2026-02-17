@@ -130,14 +130,17 @@ router.post('/demo/inject', demoInjectLimiter, (req, res) => {
     return res.status(404).json({ ok: false, error: 'Demo injection is disabled' });
   }
 
-  const configuredSecret = String(process.env.DEMO_INJECTION_SECRET || '').trim();
-  if (!configuredSecret) {
-    return res.status(500).json({ ok: false, error: 'Server missing DEMO_INJECTION_SECRET' });
-  }
+  const requireSecret = String(process.env.DEMO_INJECTION_REQUIRE_SECRET || 'false').toLowerCase() === 'true';
+  if (requireSecret) {
+    const configuredSecret = String(process.env.DEMO_INJECTION_SECRET || '').trim();
+    if (!configuredSecret) {
+      return res.status(500).json({ ok: false, error: 'Server missing DEMO_INJECTION_SECRET' });
+    }
 
-  const inputSecret = String(req.body?.secret || '').trim();
-  if (!inputSecret || !secureEquals(inputSecret, configuredSecret)) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    const inputSecret = String(req.body?.secret || '').trim();
+    if (!inputSecret || !secureEquals(inputSecret, configuredSecret)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
   }
 
   const token = normalizeSymbol(req.body?.token || 'BNB');
