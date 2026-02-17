@@ -518,23 +518,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              walletState.isConnected
-                                  ? 'Wallet: ${_short(walletState.address ?? '')}'
-                                  : 'Wallet: not connected',
+                      if (walletState.isConnected) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Wallet: ${_short(walletState.address ?? '')}',
+                              ),
                             ),
-                          ),
-                          if (!walletState.isConnected)
-                            ElevatedButton(
-                              onPressed: _connectWallet,
-                              child: const Text('Connect'),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Row(
                         children: [
                           Expanded(
@@ -616,109 +611,182 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final textTheme = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
 
-    Widget bullet(IconData icon, String text) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: 18, color: scheme.primary),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text)),
-        ],
-      );
-    }
-
-    Widget step(int n, String text) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 28,
-            child: Text(
-              '$n.',
-              style:
-                  textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-          Expanded(child: Text(text)),
-        ],
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    Widget feature(IconData icon, String label) {
+      return Expanded(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.lock_outline),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'The Sleeping Guardian',
-                    style: textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your AI agent is OFFLINE until you connect a wallet.',
-              style: textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "Don't let the crash wake you up.",
-              style:
-                  textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'VibeShield monitors market sentiment 24/7 and can trigger on-chain protection when risk spikes.',
-              style: textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            bullet(Icons.shield_outlined,
-                'Non-custodial: you keep control of your funds.'),
-            const SizedBox(height: 8),
-            bullet(Icons.bolt_outlined,
-                'Fast response: the agent can execute as soon as conditions are met.'),
-            const SizedBox(height: 8),
-            bullet(Icons.verified_user_outlined,
-                'No private keys stored in the UI.'),
-            const SizedBox(height: 16),
-            Text(
-              'Quick start',
-              style:
-                  textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            step(1, 'Connect your wallet.'),
+            Icon(icon, size: 18, color: scheme.primary),
             const SizedBox(height: 6),
-            step(2, 'Spawn your agent (one-time activation).'),
-            const SizedBox(height: 6),
-            step(3, 'Approve WBNB (demo) to enable automatic protection.'),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _connectWallet,
-                icon: const Icon(Icons.account_balance_wallet),
-                label: const Text('Connect Wallet to Activate Shield'),
-              ),
-            ),
-            const SizedBox(height: 8),
             Text(
-              'Tip: You can explore sentiment above without connecting.',
-              style:
-                  textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              label,
+              textAlign: TextAlign.center,
+              style: textTheme.bodySmall?.copyWith(color: scheme.onSurface),
             ),
           ],
+        ),
+      );
+    }
+
+    Widget stepPill({required int n, required String label}) {
+      return Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(999),
+                  border:
+                      Border.all(color: scheme.primary.withValues(alpha: 0.35)),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '$n',
+                  style: textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w800, color: scheme.primary),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.20),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.35)),
+            boxShadow: [
+              BoxShadow(
+                color: scheme.primary.withValues(alpha: 0.08),
+                blurRadius: 18,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  const Spacer(),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: scheme.errorContainer.withValues(alpha: 0.20),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                          color: scheme.error.withValues(alpha: 0.35)),
+                    ),
+                    child: Text(
+                      'SYSTEM OFFLINE',
+                      style: textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                        color: scheme.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Icon(
+                Icons.shield_outlined,
+                size: 56,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.75),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                "Don't let the crash\nwake you up.",
+                textAlign: TextAlign.center,
+                style: textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'AI Agent 24/7 protection against market dumps.',
+                textAlign: TextAlign.center,
+                style: textTheme.titleSmall?.copyWith(
+                  color: scheme.onSurface.withValues(alpha: 0.92),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  feature(Icons.shield_outlined, 'Non-custodial'),
+                  feature(Icons.bolt_outlined, 'Fast response'),
+                  feature(Icons.psychology_outlined, 'AI powered'),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  stepPill(n: 1, label: 'Connect'),
+                  const SizedBox(width: 10),
+                  stepPill(n: 2, label: 'Spawn agent'),
+                  const SizedBox(width: 10),
+                  stepPill(n: 3, label: 'Approve WBNB'),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _connectWallet,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    textStyle: textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.account_balance_wallet),
+                      SizedBox(width: 10),
+                      Text('CONNECT WALLET TO ACTIVATE'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'You can explore sentiment above without connecting.',
+                textAlign: TextAlign.center,
+                style: textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
       ),
     );
