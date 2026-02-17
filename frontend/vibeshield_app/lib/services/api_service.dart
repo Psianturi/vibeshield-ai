@@ -319,6 +319,26 @@ class ApiService {
     }
   }
 
+  Future<void> logAgentWalletTx({
+    required String userAddress,
+    required String txHash,
+    required String tokenAddress,
+    required String kind,
+  }) async {
+    try {
+      await _dio.post(
+        '/vibe/agent-demo/log-wallet-tx',
+        data: {
+          'userAddress': userAddress,
+          'txHash': txHash,
+          'tokenAddress': tokenAddress,
+          'kind': kind,
+        },
+      );
+    } catch (_) {
+    }
+  }
+
   Future<List<TxHistoryItem>> getTxHistory(
       {required String userAddress, int limit = 50}) async {
     try {

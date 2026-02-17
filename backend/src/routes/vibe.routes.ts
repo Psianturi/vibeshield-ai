@@ -251,6 +251,36 @@ router.post('/agent-demo/topup-wbnb', async (req, res) => {
   }
 });
 
+router.post('/agent-demo/log-wallet-tx', (req, res) => {
+  try {
+    const userAddress = String(req.body?.userAddress || '').trim();
+    const txHash = String(req.body?.txHash || '').trim();
+    const tokenAddress = String(req.body?.tokenAddress || 'WBNB').trim();
+    const kind = String(req.body?.kind || '').trim().toLowerCase();
+
+    if (!ethers.isAddress(userAddress)) {
+      return res.status(400).json({ ok: false, error: 'Invalid userAddress' });
+    }
+    if (!/^0x([A-Fa-f0-9]{64})$/.test(txHash)) {
+      return res.status(400).json({ ok: false, error: 'Invalid txHash' });
+    }
+
+    const normalizedKind = kind === 'spawn' || kind === 'approve' ? kind : 'wallet';
+
+    appendTxHistory({
+      userAddress,
+      tokenAddress: `${tokenAddress}:${normalizedKind}`,
+      txHash,
+      timestamp: Date.now(),
+      source: 'agent',
+    });
+
+    return res.json({ ok: true });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
 router.get('/token-presets', (req, res) => {
   const raw = String(process.env.TOKEN_PRESETS_JSON || '').trim();
   if (!raw) {

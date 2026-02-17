@@ -1078,6 +1078,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       txHash,
                                       chainId: cfg.chainId,
                                     );
+                                    await api.logAgentWalletTx(
+                                      userAddress: userAddress,
+                                      txHash: txHash,
+                                      tokenAddress: cfg.registry,
+                                      kind: 'spawn',
+                                    );
+                                    ref.invalidate(txHistoryProvider(userAddress));
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text('Agent activated. Tx: $txHash'),
@@ -1207,6 +1214,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     txHash,
                                     chainId: cfg.chainId,
                                   );
+                                  await api.logAgentWalletTx(
+                                    userAddress: userAddress,
+                                    txHash: txHash,
+                                    tokenAddress: cfg.wbnb,
+                                    kind: 'approve',
+                                  );
+                                  ref.invalidate(txHistoryProvider(userAddress));
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
