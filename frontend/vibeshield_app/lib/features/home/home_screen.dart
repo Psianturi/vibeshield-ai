@@ -55,6 +55,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  String _explorerTxUrl(String txHash, {int? chainId}) {
+    final clean = txHash.trim();
+    if (clean.isEmpty) return '';
+
+    final cid = chainId ?? AppConfig.chainId;
+    if (cid == 97) return 'https://testnet.bscscan.com/tx/$clean';
+    if (cid == 56) return 'https://bscscan.com/tx/$clean';
+    final base = AppConfig.explorerTxBaseUrl;
+    return base.isNotEmpty ? '$base$clean' : '';
+  }
+
+  Future<void> _openExternalUrl(String url) async {
+    final u = url.trim();
+    if (u.isEmpty) return;
+
+    final uri = Uri.tryParse(u);
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid explorer URL')),
+      );
+      return;
+    }
+
+    final ok = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
+
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open: $u')),
+      );
+    }
+  }
+
+  Future<void> _openExplorerTx(String txHash, {int? chainId}) async {
+    final url = _explorerTxUrl(txHash, chainId: chainId);
+    if (url.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Explorer URL not available')),
+      );
+      return;
+    }
+
+    await _openExternalUrl(url);
+  }
+
   void _showWalletConnectQr(Uri uri) {
     if (!mounted || _wcDialogOpen) return;
     _wcDialogOpen = true;
@@ -558,14 +608,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final api = ref.read(insights.apiServiceProvider);
     final walletService = ref.read(walletServiceProvider);
 
-    String explorerTxUrl(String txHash, {int? chainId}) {
-      final cid = chainId ?? AppConfig.chainId;
-      if (cid == 97) return 'https://testnet.bscscan.com/tx/$txHash';
-      if (cid == 56) return 'https://bscscan.com/tx/$txHash';
-      final base = AppConfig.explorerTxBaseUrl;
-      return base.isNotEmpty ? '$base$txHash' : '';
-    }
-
     void retryLoadConfig() {
       setState(() {
         _agentConfigFuture = api.getAgentDemoConfig();
@@ -716,12 +758,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     final status = statusSnap.data;
                     final step1Done = status?.isAgentActive == true;
                     final step2Done = status?.hasApproval == true;
-                    final userWbnbBnb =
-                      formatWeiToBnb(status?.userWbnbWei);
+                    final userWbnbBnb = formatWeiToBnb(status?.userWbnbWei);
                     final backendWbnbBnb =
-                      formatWeiToBnb(status?.backendWbnbWei);
+                        formatWeiToBnb(status?.backendWbnbWei);
                     final canExecuteByBalance =
-                      status == null || status.userWbnbWei > BigInt.zero;
+                        status == null || status.userWbnbWei > BigInt.zero;
                     final isReady = step1Done && step2Done;
 
                     return FutureBuilder<AgentDemoContext?>(
@@ -730,620 +771,685 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         final injected = injectedSnap.data;
                         final simulationActive = injected?.isActive == true;
 
-                    Future<void> topUpDemoWbnb() async {
-                      setState(() {
-                        _agentBusy = true;
-                        _agentBusyAction = 'topup';
-                      });
-                      try {
-                        final topup = await runWithBlockingDialog<
-                            AgentDemoTopUpResult>(
-                          title: 'Funding demo WBNB',
-                          message:
-                              'Requesting demo WBNB top-up to your wallet. Please wait…',
-                          action: () => api.topUpAgentDemoWbnb(
-                            userAddress: userAddress,
-                          ),
-                        );
-
-                        if (!mounted || topup == null) return;
-                        if (!topup.success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                topup.error ?? 'Failed to top up demo WBNB.',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-
-                        final amount = formatWeiToBnb(topup.amountWei);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Demo top-up sent: ${amount.isEmpty ? 'WBNB funded' : '$amount WBNB funded'}',
-                            ),
-                          ),
-                        );
-                        refreshAgentStatus();
-                      } finally {
-                        if (mounted) {
+                        Future<void> topUpDemoWbnb() async {
                           setState(() {
-                            _agentBusy = false;
-                            _agentBusyAction = null;
+                            _agentBusy = true;
+                            _agentBusyAction = 'topup';
                           });
-                        }
-                      }
-                    }
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withValues(alpha: 0.20),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (simulationActive) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
+                          try {
+                            final topup = await runWithBlockingDialog<
+                                AgentDemoTopUpResult>(
+                              title: 'Funding demo WBNB',
+                              message:
+                                  'Requesting demo WBNB top-up to your wallet. Please wait…',
+                              action: () => api.topUpAgentDemoWbnb(
+                                userAddress: userAddress,
                               ),
+                            );
+
+                            if (!mounted || topup == null) return;
+                            if (!topup.success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    topup.error ??
+                                        'Failed to top up demo WBNB.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            final amount = formatWeiToBnb(topup.amountWei);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Demo top-up sent: ${amount.isEmpty ? 'WBNB funded' : '$amount WBNB funded'}',
+                                ),
+                              ),
+                            );
+                            refreshAgentStatus();
+                          } finally {
+                            if (mounted) {
+                              setState(() {
+                                _agentBusy = false;
+                                _agentBusyAction = null;
+                              });
+                            }
+                          }
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Theme.of(context)
                                     .colorScheme
-                                    .errorContainer
-                                    .withValues(alpha: 0.35),
-                                borderRadius: BorderRadius.circular(999),
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.20),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Text(
-                                '⚠️ SIMULATION MODE',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (simulationActive) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .errorContainer
+                                            .withValues(alpha: 0.35),
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        '⚠️ SIMULATION MODE',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
+                                  Text(
+                                    isReady
+                                        ? '🟢 Agent Active'
+                                        : '⚠️ Agent Setup Required',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    isReady
+                                        ? 'Guardian is monitoring your wallet 24/7. Use simulation injection to test black-swan response.'
+                                        : 'Complete setup in 2 steps: Activate agent and approve WBNB.',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  if (simulationActive && injected != null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Injected: ${injected.headline}',
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 8),
-                          ],
-                          Text(
-                            isReady
-                                ? '🟢 Agent Active'
-                                : '⚠️ Agent Setup Required',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            isReady
-                                ? 'Guardian is monitoring your wallet 24/7. Use simulation injection to test black-swan response.'
-                                : 'Complete setup in 2 steps: Activate agent and approve WBNB.',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          if (simulationActive && injected != null) ...[
-                            const SizedBox(height: 6),
+                            if (configError != null &&
+                                configError.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .errorContainer
+                                      .withValues(alpha: 0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.warning_amber_rounded,
+                                      color:
+                                          Theme.of(context).colorScheme.error,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Config error: $configError',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .error,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else if (feeWei == null) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .errorContainer
+                                      .withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.warning_amber_rounded,
+                                      color:
+                                          Theme.of(context).colorScheme.error,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Unable to fetch creation fee. Backend may not have RPC access to BSC Testnet.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .error,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
                             Text(
-                              'Injected: ${injected.headline}',
+                              'Network: BSC Testnet${feeBnb.isEmpty ? '' : ' • Activation fee: $feeBnb BNB'}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    if (configError != null && configError.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .errorContainer
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color: Theme.of(context).colorScheme.error,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Config error: $configError',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color:
-                                          Theme.of(context).colorScheme.error,
-                                    ),
+                            if (statusSnap.connectionState ==
+                                ConnectionState.waiting) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Checking on-chain step status...',
+                                style: Theme.of(context).textTheme.bodySmall,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else if (feeWei == null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .errorContainer
-                              .withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color: Theme.of(context).colorScheme.error,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Unable to fetch creation fee. Backend may not have RPC access to BSC Testnet.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color:
-                                          Theme.of(context).colorScheme.error,
-                                    ),
+                            ] else if (status != null) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: [
+                                  Text(
+                                    step1Done
+                                        ? '✅ Agent active'
+                                        : '⏳ Agent pending',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  Text(
+                                    step2Done
+                                        ? '✅ WBNB approved'
+                                        : '⏳ Approval pending',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Text(
-                      'Network: BSC Testnet${feeBnb.isEmpty ? '' : ' • Activation fee: $feeBnb BNB'}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (statusSnap.connectionState == ConnectionState.waiting) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Checking on-chain step status...',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ] else if (status != null) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          Text(
-                            step1Done ? '✅ Agent active' : '⏳ Agent pending',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          Text(
-                            step2Done
-                                ? '✅ WBNB approved'
-                                : '⏳ Approval pending',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Your WBNB: ${userWbnbBnb.isEmpty ? '0' : userWbnbBnb} | Demo faucet: ${backendWbnbBnb.isEmpty ? '0' : backendWbnbBnb}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _agentBusy ? null : topUpDemoWbnb,
-                          icon: (_agentBusy && _agentBusyAction == 'topup')
-                              ? const SizedBox(
-                                  height: 14,
-                                  width: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.water_drop_outlined),
-                          label: const Text('💧 Top-up WBNB'),
-                        ),
-                      ),
-                      if (!canExecuteByBalance) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Need testnet funds? Tap Top-up WBNB.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                      if (status.statusError != null &&
-                          status.statusError!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Status warning: ${status.statusError}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ],
-                    const SizedBox(height: 12),
-
-                    if (!step1Done) ...[
-                      const Text('Step 1 — Choose strategy and activate agent'),
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Strategy:'),
-                          const SizedBox(width: 12),
-                          DropdownButton<int>(
-                            value: _selectedStrategy,
-                            items: const [
-                              DropdownMenuItem(value: 1, child: Text('🛡️ Tight')),
-                              DropdownMenuItem(value: 2, child: Text('💎 Loose')),
-                            ],
-                            onChanged: _agentBusy
-                                ? null
-                                : (v) {
-                                    if (v == null) return;
-                                    setState(() => _selectedStrategy = v);
-                                  },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: _agentBusy
-                              ? null
-                              : () async {
-                                  final requiredChainId =
-                                      cfg.chainId ?? AppConfig.chainId;
-                                  final connectedChainId =
-                                      walletService.chainId ?? AppConfig.chainId;
-                                  if (connectedChainId != requiredChainId) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
-                                        ),
-                                        action: SnackBarAction(
-                                          label: 'Open wallet',
-                                          onPressed: () =>
-                                              walletService.openWalletApp(),
-                                        ),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  if (feeWei == null) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Cannot spawn: activation fee is unknown.',
-                                        ),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  setState(() {
-                                    _agentBusy = true;
-                                    _agentBusyAction = 'spawn';
-                                  });
-                                  try {
-                                    final data = AgentDemoTxBuilder.spawnAgentData(
-                                      strategy: _selectedStrategy,
-                                    );
-
-                                    final txHash = await runWithBlockingDialog<String?>(
-                                      title: 'Confirm in wallet',
-                                      message:
-                                          'Please approve agent activation transaction in wallet.',
-                                      showOpenWallet: true,
-                                      action: () => walletService.sendTransaction(
-                                        to: cfg.registry,
-                                        data: data,
-                                        valueWei: feeWei,
-                                      ),
-                                    );
-
-                                    if (!mounted) return;
-                                    if (txHash == null || txHash.isEmpty) {
-                                      final err = walletService.lastError ??
-                                          'No wallet error detail';
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Spawn not confirmed. ($err)'),
-                                        ),
-                                      );
-                                      return;
-                                    }
-
-                                    final url = explorerTxUrl(
-                                      txHash,
-                                      chainId: cfg.chainId,
-                                    );
-                                    await api.logAgentWalletTx(
-                                      userAddress: userAddress,
-                                      txHash: txHash,
-                                      tokenAddress: cfg.registry,
-                                      kind: 'spawn',
-                                    );
-                                    ref.invalidate(txHistoryProvider(userAddress));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Agent activated. Tx: $txHash'),
-                                        action: url.isEmpty
-                                            ? null
-                                            : SnackBarAction(
-                                                label: 'View',
-                                                onPressed: () =>
-                                                    launchUrl(Uri.parse(url)),
-                                              ),
-                                      ),
-                                    );
-                                    refreshAgentStatus();
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() {
-                                        _agentBusy = false;
-                                        _agentBusyAction = null;
-                                      });
-                                    }
-                                  }
-                                },
-                          child: (_agentBusy && _agentBusyAction == 'spawn')
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('🛡️ Activate VibeShield'),
-                        ),
-                      ),
-                    ],
-
-                    if (step1Done && !step2Done) ...[
-                      const Text('Step 2 — Grant WBNB permission'),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Approve WBNB so the agent can protect your funds when triggered.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          const Text('Strategy:'),
-                          const SizedBox(width: 12),
-                          Text(
-                            _selectedStrategy == 1 ? 'Tight' : 'Loose',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-
-                    if (step1Done && !step2Done)
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: _agentBusy
-                            ? null
-                            : () async {
-                                final requiredChainId =
-                                    cfg.chainId ?? AppConfig.chainId;
-                                final connectedChainId =
-                                    walletService.chainId ?? AppConfig.chainId;
-                                if (connectedChainId != requiredChainId) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
-                                      ),
-                                      action: SnackBarAction(
-                                        label: 'Open wallet',
-                                        onPressed: () =>
-                                            walletService.openWalletApp(),
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                setState(() {
-                                  _agentBusy = true;
-                                  _agentBusyAction = 'approve';
-                                });
-                                try {
-                                  debugPrint(
-                                    '[agent] approve start chain=${cfg.chainId ?? AppConfig.chainId} wbnb=${cfg.wbnb} router=${cfg.router}',
-                                  );
-                                  final data = AgentDemoTxBuilder.approveData(
-                                    spender: cfg.router,
-                                    amount: AgentDemoTxBuilder.maxUint256(),
-                                  );
-
-                                  final txHash = await runWithBlockingDialog<
-                                      String?>(
-                                    title: 'Confirm in wallet',
-                                    message:
-                                        'Please confirm the Approve transaction in your wallet. This allows the router to spend your WBNB.',
-                                    showOpenWallet: true,
-                                    action: () => walletService.sendTransaction(
-                                      to: cfg.wbnb,
-                                      data: data,
-                                    ),
-                                  );
-
-                                  if (!mounted) return;
-                                  if (txHash == null || txHash.isEmpty) {
-                                    final err = walletService.lastError ??
-                                        'No wallet error detail';
-                                    debugPrint('[agent] approve failed: $err');
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Approve was not confirmed in wallet. ($err)',
-                                        ),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  debugPrint('[agent] approve txHash=$txHash');
-
-                                  final url = explorerTxUrl(
-                                    txHash,
-                                    chainId: cfg.chainId,
-                                  );
-                                  await api.logAgentWalletTx(
-                                    userAddress: userAddress,
-                                    txHash: txHash,
-                                    tokenAddress: cfg.wbnb,
-                                    kind: 'approve',
-                                  );
-                                  ref.invalidate(txHistoryProvider(userAddress));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Approve submitted: $txHash. Waiting confirmation on chain...'),
-                                      action: url.isEmpty
-                                          ? null
-                                          : SnackBarAction(
-                                              label: 'View',
-                                              onPressed: () =>
-                                                  launchUrl(Uri.parse(url)),
-                                            ),
-                                    ),
-                                  );
-                                  refreshAgentStatus();
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _agentBusy = false;
-                                      _agentBusyAction = null;
-                                    });
-                                  }
-                                }
-                              },
-                        child: (_agentBusy && _agentBusyAction == 'approve')
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                              const SizedBox(height: 6),
+                              Text(
+                                'Your WBNB: ${userWbnbBnb.isEmpty ? '0' : userWbnbBnb} | Demo faucet: ${backendWbnbBnb.isEmpty ? '0' : backendWbnbBnb}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _agentBusy ? null : topUpDemoWbnb,
+                                  icon: (_agentBusy &&
+                                          _agentBusyAction == 'topup')
+                                      ? const SizedBox(
+                                          height: 14,
+                                          width: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.water_drop_outlined),
+                                  label: const Text('💧 Top-up WBNB'),
                                 ),
-                              )
-                            : const Text('✅ Approve WBNB'),
-                      ),
-                    ),
-
-                    if (isReady) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.20),
-                        ),
-                        child: Text(
-                          'Demo Zone: Hybrid Trigger\nInject synthetic black-swan news. Monitor loop + AI decide execution automatically.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.tonal(
-                          onPressed: (_agentBusy || !canExecuteByBalance)
-                              ? null
-                              : () async {
-                                setState(() {
-                                  _agentBusy = true;
-                                  _agentBusyAction = 'inject';
-                                });
-                                try {
-                                  final result = await runWithBlockingDialog<AgentDemoInjectResult>(
-                                    title: 'Injecting simulation context',
-                                    message:
-                                        'Sending black-swan context to backend. Monitor loop and AI will react automatically…',
-                                    action: () => api.injectDemoContext(
-                                      token: 'BNB',
-                                      type: 'BRIDGE_HACK',
-                                      severity: 'CRITICAL',
-                                    ),
-                                  );
-
-                                  if (!mounted || result == null) return;
-                                  if (!result.ok) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(result.error ?? 'Failed to inject simulation context.'),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('News injected. Watch the AI monitor react on next cycle.'),
-                                    ),
-                                  );
-
-                                  refreshAgentStatus();
-                                  ref.invalidate(txHistoryProvider(userAddress));
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Injection failed: $e'),
-                                    ),
-                                  );
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _agentBusy = false;
-                                      _agentBusyAction = null;
-                                    });
-                                  }
-                                }
-                              },
-                          child: (_agentBusy && _agentBusyAction == 'inject')
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                              ),
+                              if (!canExecuteByBalance) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Need testnet funds? Tap Top-up WBNB.',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                              if (status.statusError != null &&
+                                  status.statusError!.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Status warning: ${status.statusError}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ],
+                            const SizedBox(height: 12),
+                            if (!step1Done) ...[
+                              const Text(
+                                  'Step 1 — Choose strategy and activate agent'),
+                              const SizedBox(height: 8),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Strategy:'),
+                                  const SizedBox(width: 12),
+                                  DropdownButton<int>(
+                                    value: _selectedStrategy,
+                                    items: const [
+                                      DropdownMenuItem(
+                                          value: 1, child: Text('🛡️ Tight')),
+                                      DropdownMenuItem(
+                                          value: 2, child: Text('💎 Loose')),
+                                    ],
+                                    onChanged: _agentBusy
+                                        ? null
+                                        : (v) {
+                                            if (v == null) return;
+                                            setState(
+                                                () => _selectedStrategy = v);
+                                          },
                                   ),
-                                )
-                              : const Text('💉 Inject Black Swan Event'),
-                        ),
-                      ),
-                    ],
-                  ],
-                );
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton(
+                                  onPressed: _agentBusy
+                                      ? null
+                                      : () async {
+                                          final requiredChainId =
+                                              cfg.chainId ?? AppConfig.chainId;
+                                          final connectedChainId =
+                                              walletService.chainId ??
+                                                  AppConfig.chainId;
+                                          if (connectedChainId !=
+                                              requiredChainId) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
+                                                ),
+                                                action: SnackBarAction(
+                                                  label: 'Open wallet',
+                                                  onPressed: () => walletService
+                                                      .openWalletApp(),
+                                                ),
+                                              ),
+                                            );
+                                            return;
+                                          }
+
+                                          if (feeWei == null) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Cannot spawn: activation fee is unknown.',
+                                                ),
+                                              ),
+                                            );
+                                            return;
+                                          }
+
+                                          setState(() {
+                                            _agentBusy = true;
+                                            _agentBusyAction = 'spawn';
+                                          });
+                                          try {
+                                            final data = AgentDemoTxBuilder
+                                                .spawnAgentData(
+                                              strategy: _selectedStrategy,
+                                            );
+
+                                            final txHash =
+                                                await runWithBlockingDialog<
+                                                    String?>(
+                                              title: 'Confirm in wallet',
+                                              message:
+                                                  'Please approve agent activation transaction in wallet.',
+                                              showOpenWallet: true,
+                                              action: () =>
+                                                  walletService.sendTransaction(
+                                                to: cfg.registry,
+                                                data: data,
+                                                valueWei: feeWei,
+                                              ),
+                                            );
+
+                                            if (!mounted) return;
+                                            if (txHash == null ||
+                                                txHash.isEmpty) {
+                                              final err =
+                                                  walletService.lastError ??
+                                                      'No wallet error detail';
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                      'Spawn not confirmed. ($err)'),
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            final url = _explorerTxUrl(
+                                              txHash,
+                                              chainId: cfg.chainId,
+                                            );
+                                            await api.logAgentWalletTx(
+                                              userAddress: userAddress,
+                                              txHash: txHash,
+                                              tokenAddress: cfg.registry,
+                                              kind: 'spawn',
+                                            );
+                                            ref.invalidate(
+                                                txHistoryProvider(userAddress));
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'Agent activated. Tx: $txHash'),
+                                                action: url.isEmpty
+                                                    ? null
+                                                    : SnackBarAction(
+                                                        label: 'View',
+                                                        onPressed: () =>
+                                                            _openExternalUrl(
+                                                                url),
+                                                      ),
+                                              ),
+                                            );
+                                            refreshAgentStatus();
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() {
+                                                _agentBusy = false;
+                                                _agentBusyAction = null;
+                                              });
+                                            }
+                                          }
+                                        },
+                                  child: (_agentBusy &&
+                                          _agentBusyAction == 'spawn')
+                                      ? const SizedBox(
+                                          height: 18,
+                                          width: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('🛡️ Activate VibeShield'),
+                                ),
+                              ),
+                            ],
+                            if (step1Done && !step2Done) ...[
+                              const Text('Step 2 — Grant WBNB permission'),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Approve WBNB so the agent can protect your funds when triggered.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  const Text('Strategy:'),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    _selectedStrategy == 1 ? 'Tight' : 'Loose',
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            if (step1Done && !step2Done)
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: _agentBusy
+                                      ? null
+                                      : () async {
+                                          final requiredChainId =
+                                              cfg.chainId ?? AppConfig.chainId;
+                                          final connectedChainId =
+                                              walletService.chainId ??
+                                                  AppConfig.chainId;
+                                          if (connectedChainId !=
+                                              requiredChainId) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Switch wallet network to chainId $requiredChainId (BSC Testnet) then try again.',
+                                                ),
+                                                action: SnackBarAction(
+                                                  label: 'Open wallet',
+                                                  onPressed: () => walletService
+                                                      .openWalletApp(),
+                                                ),
+                                              ),
+                                            );
+                                            return;
+                                          }
+
+                                          setState(() {
+                                            _agentBusy = true;
+                                            _agentBusyAction = 'approve';
+                                          });
+                                          try {
+                                            debugPrint(
+                                              '[agent] approve start chain=${cfg.chainId ?? AppConfig.chainId} wbnb=${cfg.wbnb} router=${cfg.router}',
+                                            );
+                                            final data =
+                                                AgentDemoTxBuilder.approveData(
+                                              spender: cfg.router,
+                                              amount: AgentDemoTxBuilder
+                                                  .maxUint256(),
+                                            );
+
+                                            final txHash =
+                                                await runWithBlockingDialog<
+                                                    String?>(
+                                              title: 'Confirm in wallet',
+                                              message:
+                                                  'Please confirm the Approve transaction in your wallet. This allows the router to spend your WBNB.',
+                                              showOpenWallet: true,
+                                              action: () =>
+                                                  walletService.sendTransaction(
+                                                to: cfg.wbnb,
+                                                data: data,
+                                              ),
+                                            );
+
+                                            if (!mounted) return;
+                                            if (txHash == null ||
+                                                txHash.isEmpty) {
+                                              final err =
+                                                  walletService.lastError ??
+                                                      'No wallet error detail';
+                                              debugPrint(
+                                                  '[agent] approve failed: $err');
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Approve was not confirmed in wallet. ($err)',
+                                                  ),
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            debugPrint(
+                                                '[agent] approve txHash=$txHash');
+
+                                            final url = _explorerTxUrl(
+                                              txHash,
+                                              chainId: cfg.chainId,
+                                            );
+                                            await api.logAgentWalletTx(
+                                              userAddress: userAddress,
+                                              txHash: txHash,
+                                              tokenAddress: cfg.wbnb,
+                                              kind: 'approve',
+                                            );
+                                            ref.invalidate(
+                                                txHistoryProvider(userAddress));
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'Approve submitted: $txHash. Waiting confirmation on chain...'),
+                                                action: url.isEmpty
+                                                    ? null
+                                                    : SnackBarAction(
+                                                        label: 'View',
+                                                        onPressed: () =>
+                                                            _openExternalUrl(
+                                                                url),
+                                                      ),
+                                              ),
+                                            );
+                                            refreshAgentStatus();
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() {
+                                                _agentBusy = false;
+                                                _agentBusyAction = null;
+                                              });
+                                            }
+                                          }
+                                        },
+                                  child: (_agentBusy &&
+                                          _agentBusyAction == 'approve')
+                                      ? const SizedBox(
+                                          height: 18,
+                                          width: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('✅ Approve WBNB'),
+                                ),
+                              ),
+                            if (isReady) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.20),
+                                ),
+                                child: Text(
+                                  'Demo Zone: Hybrid Trigger\nInject synthetic black-swan news. Monitor loop + AI decide execution automatically.',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.tonal(
+                                  onPressed: (_agentBusy ||
+                                          !canExecuteByBalance)
+                                      ? null
+                                      : () async {
+                                          setState(() {
+                                            _agentBusy = true;
+                                            _agentBusyAction = 'inject';
+                                          });
+                                          try {
+                                            final result =
+                                                await runWithBlockingDialog<
+                                                    AgentDemoInjectResult>(
+                                              title:
+                                                  'Injecting simulation context',
+                                              message:
+                                                  'Sending black-swan context to backend. Monitor loop and AI will react automatically…',
+                                              action: () =>
+                                                  api.injectDemoContext(
+                                                token: 'BNB',
+                                                type: 'BRIDGE_HACK',
+                                                severity: 'CRITICAL',
+                                              ),
+                                            );
+
+                                            if (!mounted || result == null)
+                                              return;
+                                            if (!result.ok) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(result.error ??
+                                                      'Failed to inject simulation context.'),
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'News injected. Watch the AI monitor react on next cycle.'),
+                                              ),
+                                            );
+
+                                            refreshAgentStatus();
+                                            ref.invalidate(
+                                                txHistoryProvider(userAddress));
+                                          } catch (e) {
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'Injection failed: $e'),
+                                              ),
+                                            );
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() {
+                                                _agentBusy = false;
+                                                _agentBusyAction = null;
+                                              });
+                                            }
+                                          }
+                                        },
+                                  child: (_agentBusy &&
+                                          _agentBusyAction == 'inject')
+                                      ? const SizedBox(
+                                          height: 18,
+                                          width: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text(
+                                          '💉 Inject Black Swan Event'),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
                       },
                     );
                   },
@@ -1690,15 +1796,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             '${DateTime.fromMillisecondsSinceEpoch(t.timestamp).toLocal()} • ${t.source}',
                           ),
                           trailing: TextButton(
-                            onPressed: () {
-                              final base = AppConfig.explorerTxBaseUrl;
-                              final url = base.isNotEmpty
-                                  ? '$base${t.txHash}'
-                                  : t.txHash;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(url)),
-                              );
-                            },
+                            onPressed: () => _openExplorerTx(t.txHash),
                             child: const Text('Explorer'),
                           ),
                         ),

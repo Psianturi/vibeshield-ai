@@ -92,6 +92,7 @@ This endpoint returns a **transaction hash** (`txHash`) when the on-chain call s
 - `POST /api/vibe/subscribe`
 - `POST /api/vibe/run-once`
 - Monitor behavior:
+  - `MONITOR_EXECUTION_COOLDOWN_MS=300000` (default 5 minutes): after a successful on-chain execution, monitor will skip executing again for the same subscription until the cooldown window passes.
   - `MONITOR_AUTO_DISABLE_ON_EXECUTE=false` (default): keep subscription enabled after successful execution.
   - `MONITOR_AUTO_DISABLE_ON_EXECUTE=true`: auto-disable subscription after successful execution.
   - `MONITOR_AUTO_SUBSCRIBE_FROM_AGENT_STATUS=true` (default): auto-upsert `WBNB` subscription when `/agent-demo/status` sees agent active + allowance > 0.

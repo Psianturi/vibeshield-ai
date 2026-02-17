@@ -9,6 +9,9 @@ export interface Subscription {
   amount: string; // human-readable, assumed 18 decimals for demo
   enabled: boolean;
   riskThreshold: number; // 0-100
+
+  // Timestamp (ms) of the last successful on-chain execution triggered by the monitor.
+  lastExecutedAt?: number;
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -41,7 +44,7 @@ export function upsertSubscription(sub: Subscription) {
     (s) => s.userAddress.toLowerCase() === sub.userAddress.toLowerCase() && s.tokenAddress.toLowerCase() === sub.tokenAddress.toLowerCase()
   );
 
-  if (idx >= 0) subs[idx] = sub;
+  if (idx >= 0) subs[idx] = { ...subs[idx], ...sub };
   else subs.push(sub);
 
   saveSubscriptions(subs);
