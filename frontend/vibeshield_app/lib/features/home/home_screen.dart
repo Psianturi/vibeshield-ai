@@ -1152,6 +1152,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   if (txHash.isNotEmpty) {
                                     ref.invalidate(
                                         txHistoryProvider(userAddress));
+                                    refreshAgentStatus();
                                     final url = explorerTxUrl(
                                       txHash,
                                       chainId: cfg.chainId,
@@ -1168,7 +1169,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               ),
                                       ),
                                     );
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Protection executed, but no txHash returned.'),
+                                      ),
+                                    );
                                   }
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Execute failed: $e'),
+                                    ),
+                                  );
                                 } finally {
                                   if (mounted) {
                                     setState(() {

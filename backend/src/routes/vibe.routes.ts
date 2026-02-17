@@ -131,7 +131,7 @@ router.get('/agent-demo/status', async (req, res) => {
   }
 });
 
-router.post('/agent-demo/execute-protection', requireApiAuth, async (req, res) => {
+router.post('/agent-demo/execute-protection', async (req, res) => {
   try {
     const { userAddress, amountWbnb } = req.body;
     const result = await getAgentDemo().executeProtection(

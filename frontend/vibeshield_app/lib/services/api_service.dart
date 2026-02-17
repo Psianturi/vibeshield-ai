@@ -193,17 +193,25 @@ class ApiService {
     required String userAddress,
     required String amountWbnb,
   }) async {
-    final response = await _dio.post(
-      AppConfig.agentDemoExecuteEndpoint,
-      data: {
-        'userAddress': userAddress,
-        'amountWbnb': amountWbnb,
-      },
-    );
-    final data = response.data;
-    return (data is Map<String, dynamic>)
-        ? data
-        : <String, dynamic>{'success': false, 'error': 'Invalid response'};
+    try {
+      final response = await _dio.post(
+        AppConfig.agentDemoExecuteEndpoint,
+        data: {
+          'userAddress': userAddress,
+          'amountWbnb': amountWbnb,
+        },
+      );
+      final data = response.data;
+      return (data is Map<String, dynamic>)
+          ? data
+          : <String, dynamic>{'success': false, 'error': 'Invalid response'};
+    } on DioException catch (e) {
+      final resData = e.response?.data;
+      if (resData is Map && resData['error'] != null) {
+        throw Exception(resData['error'].toString());
+      }
+      throw Exception('Failed to execute protection: ${e.message ?? e}');
+    }
   }
 
   Future<List<TxHistoryItem>> getTxHistory(
