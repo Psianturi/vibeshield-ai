@@ -13,6 +13,8 @@ export class KalibrService {
   private modelFallbacks: string[];
   private modelsCache?: { expiresAt: number; generateContentModels: Set<string> };
 
+  
+
   constructor() {
     this.apiKey = process.env.KALIBR_API_KEY || '';
     this.tenantId = process.env.KALIBR_TENANT_ID || '';
@@ -225,15 +227,40 @@ export class KalibrService {
     return { model: available[0] || clean, fallbackFrom: available[0] ? clean : undefined };
   }
 
-  async analyzeRisk(sentiment: SentimentData, price: PriceData): Promise<RiskAnalysis> {
+  async analyzeRisk(
+    sentiment: SentimentData,
+    price: PriceData,
+    options?: {
+      injectedContext?: {
+        headline: string;
+        severity?: 'HIGH' | 'CRITICAL';
+      };
+    }
+  ): Promise<RiskAnalysis> {
     // Prepare prompt once.
-    const prompt = `Analyze crypto risk:
+    let prompt = `Analyze crypto risk:
 Token: ${sentiment.token}
 Sentiment Score: ${sentiment.score}/100
 Price Change 24h: ${price.priceChange24h}%
 Volume 24h: $${price.volume24h}
 
 Should we exit position? Respond with JSON: {riskScore: 0-100, shouldExit: boolean, reason: string}`;
+
+    const injected = options?.injectedContext;
+    if (injected?.headline) {
+      const severity = injected.severity ?? 'CRITICAL';
+      prompt += `
+
+  ⚠️ EMERGENCY CONTEXT (WEIGHTED INPUT)
+  Headline: "${injected.headline}"
+  Severity: ${severity}
+
+  Instructions:
+  - Treat this event as verified for simulation purpose.
+  - Weigh emergency context at 80% and regular market metrics at 20%.
+  - If the headline indicates exploit, hack, insolvency, or bridge compromise, set riskScore > 85 and shouldExit=true.
+  - Explain clearly in reason why this event materially changes short-term risk.`;
+    }
 
     // If Kalibr tenant is configured, use Kalibr Intelligence to pick the model.
     let traceId: string = globalThis.crypto?.randomUUID?.() ?? String(Date.now());

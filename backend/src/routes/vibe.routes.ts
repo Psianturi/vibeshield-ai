@@ -4,11 +4,13 @@ import { CoinGeckoService } from '../services/coingecko.service';
 import { KalibrService } from '../services/kalibr.service';
 import { BlockchainService } from '../services/blockchain.service';
 import { AgentDemoService } from '../services/agentDemo.service';
+import { demoContextManager } from '../services/demoContext.service';
 import { loadSubscriptions, upsertSubscription } from '../storage/subscriptions';
 import { appendTxHistory, loadTxHistory } from '../storage/txHistory';
 import { runMonitorOnce } from '../monitor/vibeMonitor';
 import { ethers } from 'ethers';
 import rateLimit from 'express-rate-limit';
+import crypto from 'crypto';
 import { requireApiAuth } from '../middleware/apiAuth';
 
 const router = Router();
@@ -16,6 +18,13 @@ const router = Router();
 const cryptoracleLimiter = rateLimit({
   windowMs: Number(process.env.CRYPTORACLE_RATE_LIMIT_WINDOW_MS ?? 60_000),
   limit: Number(process.env.CRYPTORACLE_RATE_LIMIT_PER_WINDOW ?? 30),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
+const demoInjectLimiter = rateLimit({
+  windowMs: Number(process.env.DEMO_INJECT_RATE_LIMIT_WINDOW_MS ?? 60_000),
+  limit: Number(process.env.DEMO_INJECT_RATE_LIMIT_PER_WINDOW ?? 5),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
 });
@@ -31,6 +40,13 @@ function normalizeSymbol(raw: any): string {
   // Basic sanity check to avoid abusive payloads
   if (!/^[A-Z0-9]{2,15}$/.test(s)) return '';
   return s;
+}
+
+function secureEquals(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
 }
 
 function normalizeSymbolList(raw: any): string[] {
@@ -106,6 +122,73 @@ router.get('/public-config', (req, res) => {
     ok: true,
     walletConnectProjectId: String(process.env.WALLETCONNECT_PROJECT_ID || '').trim()
   });
+});
+
+router.post('/demo/inject', demoInjectLimiter, (req, res) => {
+  const demoEnabled = String(process.env.ENABLE_DEMO_INJECTION || '').toLowerCase() === 'true';
+  if (!demoEnabled) {
+    return res.status(404).json({ ok: false, error: 'Demo injection is disabled' });
+  }
+
+  const configuredSecret = String(process.env.DEMO_INJECTION_SECRET || '').trim();
+  if (!configuredSecret) {
+    return res.status(500).json({ ok: false, error: 'Server missing DEMO_INJECTION_SECRET' });
+  }
+
+  const inputSecret = String(req.body?.secret || '').trim();
+  if (!inputSecret || !secureEquals(inputSecret, configuredSecret)) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+
+  const token = normalizeSymbol(req.body?.token || 'BNB');
+  const type = String(req.body?.type || '').trim().toUpperCase();
+  const mappedHeadlineByType: Record<string, string> = {
+    BRIDGE_HACK: 'Major security breach detected on BNB bridge; cascading liquidity risk expected.',
+    ORACLE_FAILURE: 'Critical oracle outage detected; pricing integrity at risk for major pools.',
+    LIQUIDITY_CRUNCH: 'Severe liquidity crunch detected; slippage and market impact risk elevated.',
+  };
+  const headline = String(req.body?.headline || mappedHeadlineByType[type] || '').trim();
+  if (!token || !headline) {
+    return res.status(400).json({ ok: false, error: 'token and headline (or supported type) are required' });
+  }
+
+  const severityRaw = String(req.body?.severity || 'CRITICAL').trim().toUpperCase();
+  const severity = severityRaw === 'HIGH' ? 'HIGH' : 'CRITICAL';
+  const ttlMsRaw = Number(req.body?.ttlMs);
+  const ttlMs = Number.isFinite(ttlMsRaw)
+    ? Math.max(15_000, Math.min(ttlMsRaw, 10 * 60 * 1000))
+    : Number(process.env.DEMO_INJECTION_TTL_MS ?? 3 * 60 * 1000);
+
+  const context = demoContextManager.inject({
+    token,
+    headline,
+    severity,
+    ttlMs,
+  });
+
+  return res.json({
+    ok: true,
+    injected: {
+      type: type || null,
+      token: context.token,
+      headline: context.headline,
+      severity: context.severity,
+      timestamp: context.timestamp,
+      expiresAt: context.expiresAt,
+      consumed: context.consumed,
+      ttlMs,
+    },
+  });
+});
+
+router.get('/demo/context', (req, res) => {
+  const demoEnabled = String(process.env.ENABLE_DEMO_INJECTION || '').toLowerCase() === 'true';
+  if (!demoEnabled) {
+    return res.status(404).json({ ok: false, error: 'Demo injection is disabled' });
+  }
+
+  const context = demoContextManager.getSnapshot();
+  return res.json({ ok: true, context });
 });
 
 router.get('/agent-demo/config', async (req, res) => {

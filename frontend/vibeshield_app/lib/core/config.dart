@@ -30,6 +30,12 @@ class AppConfig {
   static const String agentDemoConfigEndpoint = '/vibe/agent-demo/config';
   static const String agentDemoExecuteEndpoint =
       '/vibe/agent-demo/execute-protection';
+  static const String demoInjectEndpoint = '/vibe/demo/inject';
+  static const String demoContextEndpoint = '/vibe/demo/context';
+  static const String demoInjectionSecret = String.fromEnvironment(
+    'DEMO_INJECTION_SECRET',
+    defaultValue: '',
+  );
 
   // Endpoints for enhanced Cryptoracle data
   static const String vibeInsightsEndpoint = '/vibe/insights';

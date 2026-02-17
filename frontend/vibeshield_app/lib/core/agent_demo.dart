@@ -128,6 +128,49 @@ class AgentDemoTopUpResult {
   }
 }
 
+class AgentDemoContext {
+  final String token;
+  final String headline;
+  final String severity;
+  final int timestamp;
+  final int expiresAt;
+  final bool consumed;
+
+  const AgentDemoContext({
+    required this.token,
+    required this.headline,
+    required this.severity,
+    required this.timestamp,
+    required this.expiresAt,
+    required this.consumed,
+  });
+
+  bool get isActive => !consumed && DateTime.now().millisecondsSinceEpoch < expiresAt;
+
+  factory AgentDemoContext.fromJson(Map<String, dynamic> json) {
+    return AgentDemoContext(
+      token: (json['token'] ?? '').toString(),
+      headline: (json['headline'] ?? '').toString(),
+      severity: (json['severity'] ?? '').toString(),
+      timestamp: json['timestamp'] is num ? (json['timestamp'] as num).toInt() : 0,
+      expiresAt: json['expiresAt'] is num ? (json['expiresAt'] as num).toInt() : 0,
+      consumed: json['consumed'] == true,
+    );
+  }
+}
+
+class AgentDemoInjectResult {
+  final bool ok;
+  final AgentDemoContext? context;
+  final String? error;
+
+  const AgentDemoInjectResult({
+    required this.ok,
+    this.context,
+    this.error,
+  });
+}
+
 class AgentDemoTxBuilder {
   static const _registryAbi = [
     {

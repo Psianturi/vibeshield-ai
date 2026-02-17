@@ -245,6 +245,87 @@ class ApiService {
     }
   }
 
+  Future<AgentDemoInjectResult> injectDemoContext({
+    required String token,
+    String? type,
+    String? headline,
+    String severity = 'CRITICAL',
+    int? ttlMs,
+  }) async {
+    final secret = AppConfig.demoInjectionSecret.trim();
+    if (secret.isEmpty) {
+      return const AgentDemoInjectResult(
+        ok: false,
+        error:
+            'Missing DEMO_INJECTION_SECRET in frontend build (--dart-define).',
+      );
+    }
+
+    try {
+      final response = await _dio.post(
+        AppConfig.demoInjectEndpoint,
+        data: {
+          'secret': secret,
+          'token': token,
+          if (type != null && type.isNotEmpty) 'type': type,
+          if (headline != null && headline.isNotEmpty) 'headline': headline,
+          'severity': severity,
+          if (ttlMs != null) 'ttlMs': ttlMs,
+        },
+      );
+
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['ok'] == true) {
+        final injected = data['injected'];
+        if (injected is Map) {
+          return AgentDemoInjectResult(
+            ok: true,
+            context: AgentDemoContext.fromJson(
+              injected.cast<String, dynamic>(),
+            ),
+          );
+        }
+        return const AgentDemoInjectResult(ok: true);
+      }
+
+      final err = (data is Map && data['error'] != null)
+          ? data['error'].toString()
+          : 'Invalid response';
+      return AgentDemoInjectResult(ok: false, error: err);
+    } on DioException catch (e) {
+      final resData = e.response?.data;
+      if (resData is Map && resData['error'] != null) {
+        return AgentDemoInjectResult(
+          ok: false,
+          error: resData['error'].toString(),
+        );
+      }
+      return AgentDemoInjectResult(
+        ok: false,
+        error: e.message ?? 'Failed to inject demo context',
+      );
+    }
+  }
+
+  Future<AgentDemoContext?> getDemoContext() async {
+    try {
+      final response = await _dio.get(AppConfig.demoContextEndpoint);
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['ok'] == true) {
+        final context = data['context'];
+        if (context is Map) {
+          return AgentDemoContext.fromJson(context.cast<String, dynamic>());
+        }
+        return null;
+      }
+
+      return null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      return null;
+    }
+  }
+
   Future<List<TxHistoryItem>> getTxHistory(
       {required String userAddress, int limit = 50}) async {
     try {

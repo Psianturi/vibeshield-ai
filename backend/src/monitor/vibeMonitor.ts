@@ -2,6 +2,7 @@ import { CryptoracleService } from '../services/cryptoracle.service';
 import { CoinGeckoService } from '../services/coingecko.service';
 import { KalibrService } from '../services/kalibr.service';
 import { BlockchainService } from '../services/blockchain.service';
+import { demoContextManager } from '../services/demoContext.service';
 import { loadSubscriptions, saveSubscriptions, Subscription } from '../storage/subscriptions';
 import { appendTxHistory } from '../storage/txHistory';
 
@@ -41,7 +42,16 @@ export async function runMonitorOnce() {
         getCoingecko().getPrice(sub.tokenId)
       ]);
 
-      const analysis = await getKalibr().analyzeRisk(sentiment, price);
+      const injectedContext = demoContextManager.getActiveContext(sub.tokenSymbol);
+
+      const analysis = await getKalibr().analyzeRisk(sentiment, price, {
+        injectedContext: injectedContext
+          ? {
+              headline: injectedContext.headline,
+              severity: injectedContext.severity,
+            }
+          : undefined,
+      });
 
       let executed: any = null;
       if (analysis.shouldExit && analysis.riskScore >= sub.riskThreshold) {
@@ -54,6 +64,9 @@ export async function runMonitorOnce() {
             timestamp: Date.now(),
             source: 'monitor'
           });
+          if (injectedContext) {
+            demoContextManager.markConsumed(sub.tokenSymbol);
+          }
         }
         sub.enabled = false;
       }

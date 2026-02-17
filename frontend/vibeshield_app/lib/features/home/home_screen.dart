@@ -29,7 +29,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _tokenIdController = TextEditingController(text: 'bitcoin');
   final _tokenAddressController = TextEditingController(text: '');
   final _amountController = TextEditingController(text: '1');
-  final _agentAmountController = TextEditingController(text: '0.01');
   final _tokenIdFocusNode = FocusNode();
   final _tokenAddressFocusNode = FocusNode();
   StreamSubscription<Uri>? _wcUriSub;
@@ -37,10 +36,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   bool _isSwapping = false;
   bool _agentBusy = false;
-  String? _agentBusyAction; // spawn|approve|execute
+  String? _agentBusyAction; // spawn|approve|inject|topup
   int _selectedStrategy = 1; // 1 = TIGHT, 2 = LOOSE
   Future<AgentDemoConfig?>? _agentConfigFuture;
   Future<AgentDemoStatus?>? _agentStatusFuture;
+  Future<AgentDemoContext?>? _agentDemoContextFuture;
 
   @override
   void initState() {
@@ -399,7 +399,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _tokenIdController.dispose();
     _tokenAddressController.dispose();
     _amountController.dispose();
-    _agentAmountController.dispose();
     _tokenIdFocusNode.dispose();
     _tokenAddressFocusNode.dispose();
     _wcUriSub?.cancel();
@@ -576,6 +575,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     void refreshAgentStatus() {
       setState(() {
         _agentStatusFuture = api.getAgentDemoStatus(userAddress: userAddress);
+        _agentDemoContextFuture = api.getDemoContext();
       });
     }
 
@@ -724,6 +724,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       status == null || status.userWbnbWei > BigInt.zero;
                     final isReady = step1Done && step2Done;
 
+                    return FutureBuilder<AgentDemoContext?>(
+                      future: _agentDemoContextFuture ??= api.getDemoContext(),
+                      builder: (context, injectedSnap) {
+                        final injected = injectedSnap.data;
+                        final simulationActive = injected?.isActive == true;
+
                     Future<void> topUpDemoWbnb() async {
                       setState(() {
                         _agentBusy = true;
@@ -787,6 +793,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (simulationActive) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .errorContainer
+                                    .withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '⚠️ SIMULATION MODE',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           Text(
                             isReady
                                 ? '🟢 Agent Active'
@@ -799,10 +828,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           const SizedBox(height: 6),
                           Text(
                             isReady
-                                ? 'Guardian is monitoring your wallet 24/7. Use Manual Override only for demo simulation.'
+                                ? 'Guardian is monitoring your wallet 24/7. Use simulation injection to test black-swan response.'
                                 : 'Complete setup in 2 steps: Activate agent and approve WBNB.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
+                          if (simulationActive && injected != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Injected: ${injected.headline}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -929,7 +965,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       if (!canExecuteByBalance) ...[
                         const SizedBox(height: 4),
                         Text(
-                          'Execute needs WBNB balance > 0. Use "Top-up Demo WBNB" first.',
+                          'Need testnet funds? Tap Top-up WBNB.',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -1219,18 +1255,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               .withValues(alpha: 0.20),
                         ),
                         child: Text(
-                          'Demo Zone: Manual Override\nUse this to simulate a high-risk event during demo.',
+                          'Demo Zone: Hybrid Trigger\nInject synthetic black-swan news. Monitor loop + AI decide execution automatically.',
                           style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _agentAmountController,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(
-                          labelText: 'Amount WBNB for simulation',
-                          border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -1240,79 +1266,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           onPressed: (_agentBusy || !canExecuteByBalance)
                               ? null
                               : () async {
-                                final amount =
-                                    _agentAmountController.text.trim();
-                                if (amount.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Amount is required.'),
-                                    ),
-                                  );
-                                  return;
-                                }
-
                                 setState(() {
                                   _agentBusy = true;
-                                  _agentBusyAction = 'execute';
+                                  _agentBusyAction = 'inject';
                                 });
                                 try {
-                                  final result = await runWithBlockingDialog<
-                                      Map<String, dynamic>>(
-                                    title: 'Submitting to guardian',
+                                  final result = await runWithBlockingDialog<AgentDemoInjectResult>(
+                                    title: 'Injecting simulation context',
                                     message:
-                                        'This step is executed by the backend guardian (no wallet confirmation). Please wait…',
-                                    action: () => api.executeAgentProtection(
-                                      userAddress: userAddress,
-                                      amountWbnb: amount,
+                                        'Sending black-swan context to backend. Monitor loop and AI will react automatically…',
+                                    action: () => api.injectDemoContext(
+                                      token: 'BNB',
+                                      type: 'BRIDGE_HACK',
+                                      severity: 'CRITICAL',
                                     ),
                                   );
 
                                   if (!mounted || result == null) return;
-                                  final ok = result['success'] == true;
-                                  if (!ok) {
-                                    final err = (result['error'] ?? 'Failed')
-                                        .toString();
+                                  if (!result.ok) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(err)),
+                                      SnackBar(
+                                        content: Text(result.error ?? 'Failed to inject simulation context.'),
+                                      ),
                                     );
                                     return;
                                   }
 
-                                  final txHash =
-                                      (result['txHash'] ?? '').toString();
-                                  if (txHash.isNotEmpty) {
-                                    ref.invalidate(
-                                        txHistoryProvider(userAddress));
-                                    refreshAgentStatus();
-                                    final url = explorerTxUrl(
-                                      txHash,
-                                      chainId: cfg.chainId,
-                                    );
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Protected. Tx: $txHash'),
-                                        action: url.isEmpty
-                                            ? null
-                                            : SnackBarAction(
-                                                label: 'View',
-                                                onPressed: () =>
-                                                    launchUrl(Uri.parse(url)),
-                                              ),
-                                      ),
-                                    );
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Protection executed, but no txHash returned.'),
-                                      ),
-                                    );
-                                  }
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('News injected. Watch the AI monitor react on next cycle.'),
+                                    ),
+                                  );
+
+                                  refreshAgentStatus();
+                                  ref.invalidate(txHistoryProvider(userAddress));
                                 } catch (e) {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Execute failed: $e'),
+                                      content: Text('Injection failed: $e'),
                                     ),
                                   );
                                 } finally {
@@ -1324,7 +1316,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   }
                                 }
                               },
-                          child: (_agentBusy && _agentBusyAction == 'execute')
+                          child: (_agentBusy && _agentBusyAction == 'inject')
                               ? const SizedBox(
                                   height: 18,
                                   width: 18,
@@ -1332,12 +1324,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('🚨 Simulate High-Risk Event (Execute)'),
+                              : const Text('💉 Inject Black Swan Event'),
                         ),
                       ),
                     ],
                   ],
                 );
+                      },
+                    );
                   },
                 );
               },
