@@ -98,7 +98,9 @@ export async function runMonitorOnce() {
             executorAddress,
           });
           if (injectedContext) {
-            demoContextManager.markConsumed(sub.tokenSymbol);
+            // Demo injected context is intentionally one-shot.
+            // Use token-agnostic consume to avoid symbol alias mismatch (BNB vs WBNB).
+            demoContextManager.markConsumed();
           }
           if (autoDisableOnExecute) {
             sub.enabled = false;

@@ -233,19 +233,35 @@ router.get('/agent-demo/status', async (req, res) => {
         const riskThreshold = Number.isFinite(riskThresholdRaw) ? riskThresholdRaw : 80;
 
         if (cfg.wbnb && ethers.isAddress(cfg.wbnb)) {
-          upsertSubscription({
-            userAddress,
-            tokenSymbol: 'WBNB',
-            tokenId: 'binancecoin',
-            tokenAddress: cfg.wbnb,
-            amount,
-            enabled: true,
-            riskThreshold,
-          });
-          autoSubscribed = true;
-          console.log(
-            `[Monitor] auto-subscribed user=${userAddress} token=WBNB amount=${amount} threshold=${riskThreshold}`,
+          const existing = loadSubscriptions().find(
+            (s) =>
+              String(s.userAddress || '').toLowerCase() === userAddress.toLowerCase() &&
+              String(s.tokenAddress || '').toLowerCase() === cfg.wbnb!.toLowerCase(),
           );
+
+          const shouldUpsert =
+            !existing ||
+            existing.enabled !== true ||
+            String(existing.amount || '') !== amount ||
+            Number(existing.riskThreshold) !== Number(riskThreshold) ||
+            String(existing.tokenSymbol || '').toUpperCase() !== 'WBNB' ||
+            String(existing.tokenId || '').toLowerCase() !== 'binancecoin';
+
+          if (shouldUpsert) {
+            upsertSubscription({
+              userAddress,
+              tokenSymbol: 'WBNB',
+              tokenId: 'binancecoin',
+              tokenAddress: cfg.wbnb,
+              amount,
+              enabled: true,
+              riskThreshold,
+            });
+            autoSubscribed = true;
+            console.log(
+              `[Monitor] auto-subscribed user=${userAddress} token=WBNB amount=${amount} threshold=${riskThreshold}`,
+            );
+          }
         }
       }
     }
