@@ -25,6 +25,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  static const bool _showEmergencySwap = false;
+
   final _tokenController = TextEditingController(text: 'BTC');
   final _tokenIdController = TextEditingController(text: 'bitcoin');
   final _tokenAddressController = TextEditingController(text: '');
@@ -500,6 +502,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 16),
               _buildMultiTokenDashboardCard(),
               const SizedBox(height: 16),
+              if (!walletState.isConnected) ...[
+                _buildPreConnectLandingCard(context),
+                const SizedBox(height: 16),
+              ],
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -591,14 +597,128 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (walletState.isConnected &&
                   (walletState.address?.isNotEmpty ?? false)) ...[
                 const SizedBox(height: 24),
-                _buildEmergencySwapCard(context, walletState.address!),
-                const SizedBox(height: 16),
+                if (_showEmergencySwap) ...[
+                  _buildEmergencySwapCard(context, walletState.address!),
+                  const SizedBox(height: 16),
+                ],
                 _buildAgentDemoCard(context, walletState.address!),
                 const SizedBox(height: 16),
                 _buildTxHistoryCard(context, walletState.address!),
               ]
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreConnectLandingCard(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+
+    Widget bullet(IconData icon, String text) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 18, color: scheme.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text)),
+        ],
+      );
+    }
+
+    Widget step(int n, String text) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 28,
+            child: Text(
+              '$n.',
+              style:
+                  textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Expanded(child: Text(text)),
+        ],
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.lock_outline),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'The Sleeping Guardian',
+                    style: textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your AI agent is OFFLINE until you connect a wallet.',
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Don't let the crash wake you up.",
+              style:
+                  textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'VibeShield monitors market sentiment 24/7 and can trigger on-chain protection when risk spikes.',
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            bullet(Icons.shield_outlined,
+                'Non-custodial: you keep control of your funds.'),
+            const SizedBox(height: 8),
+            bullet(Icons.bolt_outlined,
+                'Fast response: the agent can execute as soon as conditions are met.'),
+            const SizedBox(height: 8),
+            bullet(Icons.verified_user_outlined,
+                'No private keys stored in the UI.'),
+            const SizedBox(height: 16),
+            Text(
+              'Quick start',
+              style:
+                  textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            step(1, 'Connect your wallet.'),
+            const SizedBox(height: 6),
+            step(2, 'Spawn your agent (one-time activation).'),
+            const SizedBox(height: 6),
+            step(3, 'Approve WBNB (demo) to enable automatic protection.'),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _connectWallet,
+                icon: const Icon(Icons.account_balance_wallet),
+                label: const Text('Connect Wallet to Activate Shield'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tip: You can explore sentiment above without connecting.',
+              style:
+                  textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
         ),
       ),
     );
