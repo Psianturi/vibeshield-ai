@@ -155,6 +155,16 @@ router.post('/agent-demo/execute-protection', async (req, res) => {
   }
 });
 
+router.post('/agent-demo/topup-wbnb', async (req, res) => {
+  try {
+    const userAddress = String(req.body?.userAddress || '').trim();
+    const result = await getAgentDemo().topUpWbnbForDemo(userAddress);
+    return res.json(result);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/token-presets', (req, res) => {
   const raw = String(process.env.TOKEN_PRESETS_JSON || '').trim();
   if (!raw) {

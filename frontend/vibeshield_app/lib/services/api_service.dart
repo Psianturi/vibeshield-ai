@@ -189,6 +189,37 @@ class ApiService {
     throw Exception('Failed to load agent status: $err');
   }
 
+  Future<AgentDemoTopUpResult> topUpAgentDemoWbnb({
+    required String userAddress,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/vibe/agent-demo/topup-wbnb',
+        data: {'userAddress': userAddress},
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return AgentDemoTopUpResult.fromJson(data);
+      }
+      return const AgentDemoTopUpResult(
+        success: false,
+        error: 'Invalid response',
+      );
+    } on DioException catch (e) {
+      final resData = e.response?.data;
+      if (resData is Map && resData['error'] != null) {
+        return AgentDemoTopUpResult(
+          success: false,
+          error: resData['error'].toString(),
+        );
+      }
+      return AgentDemoTopUpResult(
+        success: false,
+        error: e.message ?? 'Failed to top up WBNB',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> executeAgentProtection({
     required String userAddress,
     required String amountWbnb,

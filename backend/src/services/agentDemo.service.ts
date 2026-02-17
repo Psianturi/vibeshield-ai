@@ -27,6 +27,8 @@ const ROUTER_ABI = [
 const ERC20_ABI = [
   'function balanceOf(address owner) external view returns (uint256)',
   'function allowance(address owner, address spender) external view returns (uint256)',
+  'function transfer(address to, uint256 amount) external returns (bool)',
+  'function deposit() external payable',
 ];
 
 const ROUTER_ERROR_BY_SELECTOR: Record<string, string> = {
@@ -428,6 +430,8 @@ export class AgentDemoService {
     isAgentActive: boolean;
     strategy: number;
     allowanceWei: string;
+    userWbnbWei: string;
+    backendWbnbWei: string;
     statusError: string | null;
   }> {
     const resolved = this.resolveAddresses();
@@ -441,6 +445,8 @@ export class AgentDemoService {
     let isAgentActive = false;
     let strategy = 0;
     let allowanceWei = '0';
+    let userWbnbWei = '0';
+    let backendWbnbWei = '0';
     let statusError: string | null = null;
 
     const rpcUrl = this.rpcUrl;
@@ -453,6 +459,8 @@ export class AgentDemoService {
         isAgentActive,
         strategy,
         allowanceWei,
+        userWbnbWei,
+        backendWbnbWei,
         statusError,
       };
     }
@@ -475,6 +483,15 @@ export class AgentDemoService {
       strategy = Number(agent?.[1] ?? 0);
 
       const token = new ethers.Contract(wbnb, ERC20_ABI, provider);
+      const userBal = await token.balanceOf(userAddress);
+      userWbnbWei =
+        (typeof userBal === 'bigint' ? userBal : BigInt(String(userBal))).toString();
+
+      const backendAddress = this.getWallet().address;
+      const backendBal = await token.balanceOf(backendAddress);
+      backendWbnbWei =
+        (typeof backendBal === 'bigint' ? backendBal : BigInt(String(backendBal))).toString();
+
       const allowance = await token.allowance(userAddress, router);
       allowanceWei = (typeof allowance === 'bigint' ? allowance : BigInt(String(allowance))).toString();
 
@@ -491,7 +508,88 @@ export class AgentDemoService {
       isAgentActive,
       strategy,
       allowanceWei,
+      userWbnbWei,
+      backendWbnbWei,
       statusError,
     };
+  }
+
+  async topUpWbnbForDemo(userAddress: string): Promise<{
+    success: boolean;
+    txHash?: string;
+    amountWei?: string;
+    error?: string;
+  }> {
+    try {
+      if (!ethers.isAddress(userAddress)) {
+        return { success: false, error: 'Invalid userAddress' };
+      }
+
+      const resolved = this.resolveAddresses();
+      const { chainId } = resolved;
+      const wallet = this.getWallet();
+      const provider = wallet.provider!;
+
+      const selectedResult = await this.selectUsableAddresses(
+        provider,
+        chainId,
+        resolved.selected,
+        resolved.fallbackFromDeployment,
+      );
+      const wbnb = selectedResult.selected.wbnb;
+
+      const topUpWei = BigInt(
+        String(process.env.AGENT_DEMO_WBNB_TOPUP_WEI || '10000000000000000').trim(),
+      ); // default 0.01 WBNB
+      if (topUpWei <= 0n) {
+        return { success: false, error: 'Invalid AGENT_DEMO_WBNB_TOPUP_WEI' };
+      }
+
+      const gasReserveWei = BigInt(
+        String(process.env.AGENT_DEMO_NATIVE_GAS_RESERVE_WEI || '20000000000000000').trim(),
+      ); // keep 0.02 tBNB for gas by default
+
+      const token = new ethers.Contract(wbnb, ERC20_ABI, wallet);
+      const backendWbnbRaw = await token.balanceOf(wallet.address);
+      let backendWbnb =
+        typeof backendWbnbRaw === 'bigint'
+          ? backendWbnbRaw
+          : BigInt(String(backendWbnbRaw));
+
+      if (backendWbnb < topUpWei) {
+        const needWrap = topUpWei - backendWbnb;
+        const nativeBal = await provider.getBalance(wallet.address);
+        const freeNative = nativeBal > gasReserveWei ? nativeBal - gasReserveWei : 0n;
+
+        if (freeNative < needWrap) {
+          return {
+            success: false,
+            error:
+              'Demo faucet has insufficient tBNB/WBNB. Top up guardian wallet balance first.',
+          };
+        }
+
+        const wrapTx = await token.deposit({ value: needWrap });
+        await wrapTx.wait();
+        backendWbnb += needWrap;
+      }
+
+      if (backendWbnb < topUpWei) {
+        return {
+          success: false,
+          error: 'Demo faucet WBNB balance is still insufficient after wrap.',
+        };
+      }
+
+      const tx = await token.transfer(userAddress, topUpWei);
+      const receipt = await tx.wait();
+      return {
+        success: true,
+        txHash: receipt.hash,
+        amountWei: topUpWei.toString(),
+      };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Failed to top up WBNB' };
+    }
   }
 }

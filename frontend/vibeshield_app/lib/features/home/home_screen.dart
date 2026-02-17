@@ -716,6 +716,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     final status = statusSnap.data;
                     final step1Done = status?.isAgentActive == true;
                     final step2Done = status?.hasApproval == true;
+                    final userWbnbBnb =
+                      formatWeiToBnb(status?.userWbnbWei);
+                    final backendWbnbBnb =
+                      formatWeiToBnb(status?.backendWbnbWei);
+                    final canExecuteByBalance =
+                      status == null || status.userWbnbWei > BigInt.zero;
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -833,6 +839,87 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Your WBNB: ${userWbnbBnb.isEmpty ? '0' : userWbnbBnb} | Demo faucet WBNB: ${backendWbnbBnb.isEmpty ? '0' : backendWbnbBnb}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _agentBusy
+                              ? null
+                              : () async {
+                                  setState(() {
+                                    _agentBusy = true;
+                                    _agentBusyAction = 'topup';
+                                  });
+                                  try {
+                                    final topup = await runWithBlockingDialog<
+                                        AgentDemoTopUpResult>(
+                                      title: 'Funding demo WBNB',
+                                      message:
+                                          'Requesting demo WBNB top-up to your wallet. Please wait…',
+                                      action: () =>
+                                          api.topUpAgentDemoWbnb(
+                                        userAddress: userAddress,
+                                      ),
+                                    );
+
+                                    if (!mounted || topup == null) return;
+                                    if (!topup.success) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            topup.error ??
+                                                'Failed to top up demo WBNB.',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    final amount =
+                                        formatWeiToBnb(topup.amountWei);
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Demo top-up sent: ${amount.isEmpty ? 'WBNB funded' : '$amount WBNB funded'}',
+                                        ),
+                                      ),
+                                    );
+                                    refreshAgentStatus();
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() {
+                                        _agentBusy = false;
+                                        _agentBusyAction = null;
+                                      });
+                                    }
+                                  }
+                                },
+                          icon: (_agentBusy && _agentBusyAction == 'topup')
+                              ? const SizedBox(
+                                  height: 14,
+                                  width: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.water_drop_outlined),
+                          label: const Text('Get demo WBNB'),
+                        ),
+                      ),
+                      if (!canExecuteByBalance) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Execute needs WBNB balance > 0. Use "Get demo WBNB" first.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                       if (status.statusError != null &&
                           status.statusError!.isNotEmpty) ...[
                         const SizedBox(height: 8),
@@ -1106,7 +1193,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.tonal(
-                        onPressed: _agentBusy
+                        onPressed: (_agentBusy || !canExecuteByBalance)
                             ? null
                             : () async {
                                 final amount =

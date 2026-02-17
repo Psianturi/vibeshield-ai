@@ -50,6 +50,8 @@ class AgentDemoStatus {
   final bool isAgentActive;
   final int strategy;
   final BigInt allowanceWei;
+  final BigInt userWbnbWei;
+  final BigInt backendWbnbWei;
   final String? statusError;
 
   const AgentDemoStatus({
@@ -58,6 +60,8 @@ class AgentDemoStatus {
     required this.isAgentActive,
     required this.strategy,
     required this.allowanceWei,
+    required this.userWbnbWei,
+    required this.backendWbnbWei,
     this.statusError,
   });
 
@@ -70,13 +74,56 @@ class AgentDemoStatus {
       allowance = BigInt.tryParse(rawAllowance.toString().trim()) ?? BigInt.zero;
     }
 
+    BigInt userWbnb = BigInt.zero;
+    final rawUserWbnb = json['userWbnbWei'];
+    if (rawUserWbnb != null) {
+      userWbnb = BigInt.tryParse(rawUserWbnb.toString().trim()) ?? BigInt.zero;
+    }
+
+    BigInt backendWbnb = BigInt.zero;
+    final rawBackendWbnb = json['backendWbnbWei'];
+    if (rawBackendWbnb != null) {
+      backendWbnb = BigInt.tryParse(rawBackendWbnb.toString().trim()) ?? BigInt.zero;
+    }
+
     return AgentDemoStatus(
       chainId: json['chainId'] is num ? (json['chainId'] as num).toInt() : null,
       userAddress: (json['userAddress'] ?? '').toString(),
       isAgentActive: json['isAgentActive'] == true,
       strategy: json['strategy'] is num ? (json['strategy'] as num).toInt() : 0,
       allowanceWei: allowance,
+      userWbnbWei: userWbnb,
+      backendWbnbWei: backendWbnb,
       statusError: json['statusError']?.toString(),
+    );
+  }
+}
+
+class AgentDemoTopUpResult {
+  final bool success;
+  final String? txHash;
+  final BigInt? amountWei;
+  final String? error;
+
+  const AgentDemoTopUpResult({
+    required this.success,
+    this.txHash,
+    this.amountWei,
+    this.error,
+  });
+
+  factory AgentDemoTopUpResult.fromJson(Map<String, dynamic> json) {
+    BigInt? amount;
+    final rawAmount = json['amountWei'];
+    if (rawAmount != null) {
+      amount = BigInt.tryParse(rawAmount.toString().trim());
+    }
+
+    return AgentDemoTopUpResult(
+      success: json['success'] == true,
+      txHash: json['txHash']?.toString(),
+      amountWei: amount,
+      error: json['error']?.toString(),
     );
   }
 }
