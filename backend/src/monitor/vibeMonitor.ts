@@ -1,7 +1,7 @@
 import { CryptoracleService } from '../services/cryptoracle.service';
 import { CoinGeckoService } from '../services/coingecko.service';
 import { KalibrService } from '../services/kalibr.service';
-import { BlockchainService } from '../services/blockchain.service';
+import { AgentDemoService } from '../services/agentDemo.service';
 import { demoContextManager } from '../services/demoContext.service';
 import { loadSubscriptions, saveSubscriptions, Subscription } from '../storage/subscriptions';
 import { appendTxHistory } from '../storage/txHistory';
@@ -9,7 +9,7 @@ import { appendTxHistory } from '../storage/txHistory';
 let _cryptoracle: CryptoracleService | null = null;
 let _coingecko: CoinGeckoService | null = null;
 let _kalibr: KalibrService | null = null;
-let _blockchain: BlockchainService | null = null;
+let _agentDemo: AgentDemoService | null = null;
 
 function getCryptoracle(): CryptoracleService {
   if (!_cryptoracle) _cryptoracle = new CryptoracleService();
@@ -26,9 +26,9 @@ function getKalibr(): KalibrService {
   return _kalibr;
 }
 
-function getBlockchain(): BlockchainService {
-  if (!_blockchain) _blockchain = new BlockchainService();
-  return _blockchain;
+function getAgentDemo(): AgentDemoService {
+  if (!_agentDemo) _agentDemo = new AgentDemoService();
+  return _agentDemo;
 }
 
 export async function runMonitorOnce() {
@@ -55,7 +55,7 @@ export async function runMonitorOnce() {
 
       let executed: any = null;
       if (analysis.shouldExit && analysis.riskScore >= sub.riskThreshold) {
-        executed = await getBlockchain().emergencySwap(sub.userAddress, sub.tokenAddress, sub.amount);
+        executed = await getAgentDemo().executeProtection(sub.userAddress, sub.amount);
         if (executed?.success && executed?.txHash) {
           appendTxHistory({
             userAddress: sub.userAddress,
