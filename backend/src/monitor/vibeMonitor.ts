@@ -42,7 +42,14 @@ export async function runMonitorOnce() {
         getCoingecko().getPrice(sub.tokenId)
       ]);
 
-      const injectedContext = demoContextManager.getActiveContext(sub.tokenSymbol);
+      const symbol = String(sub.tokenSymbol || '').trim().toUpperCase();
+      const alias = symbol.startsWith('W') && symbol.length > 1
+        ? symbol.substring(1)
+        : symbol;
+
+      const injectedContext =
+        demoContextManager.getActiveContext(symbol) ||
+        (alias !== symbol ? demoContextManager.getActiveContext(alias) : null);
 
       const analysis = await getKalibr().analyzeRisk(sentiment, price, {
         injectedContext: injectedContext
