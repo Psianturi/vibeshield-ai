@@ -53,7 +53,10 @@ app.get('/health', (req, res) => {
       },
       monitor: {
         enabled: String(process.env.ENABLE_MONITOR || '').toLowerCase() === 'true',
-        intervalMs: Number(process.env.MONITOR_INTERVAL_MS ?? 30000)
+        intervalMs: Number(process.env.MONITOR_INTERVAL_MS ?? 30000),
+        autoDisableOnExecute:
+          String(process.env.MONITOR_AUTO_DISABLE_ON_EXECUTE || 'false').toLowerCase() ===
+          'true'
       }
     }
   });

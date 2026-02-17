@@ -91,6 +91,9 @@ This endpoint returns a **transaction hash** (`txHash`) when the on-chain call s
 - `GET /api/vibe/subscriptions`
 - `POST /api/vibe/subscribe`
 - `POST /api/vibe/run-once`
+- Monitor behavior:
+  - `MONITOR_AUTO_DISABLE_ON_EXECUTE=false` (default): keep subscription enabled after successful execution.
+  - `MONITOR_AUTO_DISABLE_ON_EXECUTE=true`: auto-disable subscription after successful execution.
 
 ## Demo Hybrid Trigger
 

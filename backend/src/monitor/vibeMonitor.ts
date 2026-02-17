@@ -34,6 +34,8 @@ function getAgentDemo(): AgentDemoService {
 export async function runMonitorOnce() {
   const subs = loadSubscriptions().filter((s) => s.enabled);
   const results: any[] = [];
+  const autoDisableOnExecute =
+    String(process.env.MONITOR_AUTO_DISABLE_ON_EXECUTE || 'false').toLowerCase() === 'true';
 
   for (const sub of subs) {
     try {
@@ -74,8 +76,10 @@ export async function runMonitorOnce() {
           if (injectedContext) {
             demoContextManager.markConsumed(sub.tokenSymbol);
           }
+          if (autoDisableOnExecute) {
+            sub.enabled = false;
+          }
         }
-        sub.enabled = false;
       }
 
       results.push({ sub, sentiment, price, analysis, executed });
