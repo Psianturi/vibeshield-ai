@@ -9,6 +9,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Railway (and most PaaS) run behind a reverse proxy.
+// Needed so express-rate-limit can safely read X-Forwarded-For.
+app.set('trust proxy', 1);
+
 const corsOptions: cors.CorsOptions = {
   origin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
