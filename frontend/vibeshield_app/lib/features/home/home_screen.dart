@@ -27,7 +27,12 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const bool _showEmergencySwap = false;
-  static const String _agentAvatarAssetPath = 'assets/agent_avatar.png';
+  static const String _tightAgentAvatarAssetPath = 'assets/tight_agent.png';
+  static const String _looseAgentAvatarAssetPath = 'assets/loose_agent.png';
+
+  String _agentAvatarPathForStrategy(int strategy) {
+    return strategy == 2 ? _looseAgentAvatarAssetPath : _tightAgentAvatarAssetPath;
+  }
 
   final _tokenController = TextEditingController(text: 'BTC');
   final _tokenIdController = TextEditingController(text: 'bitcoin');
@@ -111,6 +116,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _showAgentProfileDialog({
     required String userAddress,
+    required int strategy,
     required bool step1Done,
     required bool step2Done,
     required bool simulationActive,
@@ -132,11 +138,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ? 'Agent spawned. Approval required for auto-protection.'
             : 'Agent is dormant. Complete setup to unlock protection.';
 
+    final strategyLabel = strategy == 2 ? 'Loose' : 'Tight';
     final profileName = step2Done
-        ? 'The Strategic Guardian'
-        : step1Done
-            ? 'The Waking Guardian'
-            : 'The Dormant Guardian';
+      ? 'The Strategic $strategyLabel Guardian'
+      : step1Done
+        ? 'The Waking $strategyLabel Guardian'
+        : 'The Dormant $strategyLabel Guardian';
+
+    final avatarPath = _agentAvatarPathForStrategy(strategy);
 
     showDialog<void>(
       context: context,
@@ -192,7 +201,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
                         child: Image.asset(
-                          _agentAvatarAssetPath,
+                          avatarPath,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             return Container(
@@ -1205,6 +1214,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 onTap: () => _showAgentProfileDialog(
                                   userAddress: userAddress,
+                                  strategy: (status?.strategy ?? _selectedStrategy) == 2 ? 2 : 1,
                                   step1Done: step1Done,
                                   step2Done: step2Done,
                                   simulationActive: simulationActive,
@@ -1296,6 +1306,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ],
                                   ),
                                 ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _showAgentProfileDialog(
+                                  userAddress: userAddress,
+                                  strategy: (status?.strategy ?? _selectedStrategy) == 2 ? 2 : 1,
+                                  step1Done: step1Done,
+                                  step2Done: step2Done,
+                                  simulationActive: simulationActive,
+                                  userWbnb: userWbnbBnb,
+                                  backendWbnb: backendWbnbBnb,
+                                ),
+                                icon: const Icon(Icons.badge_outlined),
+                                label: const Text('View Agent Card'),
                               ),
                             ),
                             if (configError != null &&
