@@ -127,14 +127,20 @@ This endpoint returns a **transaction hash** (`txHash`) when the on-chain call s
 2. Add environment variables in Railway dashboard
 3. Deploy automatically on push
 
-Minimum variables for on-chain execution:
-- `BSC_RPC_URL`
-- `PRIVATE_KEY` (guardian key)
-- `VIBEGUARD_VAULT_ADDRESS`
+Minimum variables for Agent Demo on-chain execution:
+- `PRIVATE_KEY` (or `AGENT_DEMO_PRIVATE_KEY`) for guardian/executor wallet
+- `AGENT_DEMO_RPC_URL` (recommended) or `BSC_TESTNET_RPC_URL`
+
+Deployment address source:
+- Keep `backend/deployments/agent-demo-97.json` available in runtime, **or**
+- Set `AGENT_DEMO_DEPLOYMENT_PATH` to the absolute path of that deployment file.
 
 For Agent Demo on BSC Testnet (chain 97), set one of:
 - `AGENT_DEMO_RPC_URL=https://bsc-testnet-dataseed.bnbchain.org`
 - or `BSC_TESTNET_RPC_URL=https://bsc-testnet-dataseed.bnbchain.org`
+
+Legacy/manual vault endpoint notes (`POST /api/vibe/execute-swap`):
+- Requires `VIBESHIELD_VAULT_ADDRESS` (alias `VIBEGUARD_VAULT_ADDRESS` is also accepted in code).
 
 If you only want the API/healthcheck up, you can leave swap vars unset; `/health` will still work.
 

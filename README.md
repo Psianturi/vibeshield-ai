@@ -4,7 +4,7 @@
 
 **Tagline:** *"Sell the Rumor, Protect the Vibe."*
 
-AI-powered crypto portfolio guardian that monitors social sentiment and executes emergency swaps before crashes happen.
+AI-powered crypto portfolio guardian that monitors social sentiment and triggers protection workflows when market risk spikes.
 
 ## Good Vibes Only (BNB Chain)
 
@@ -62,7 +62,7 @@ npm run dev
 
 ### Frontend
 ```bash
-cd frontend
+cd frontend/vibeshield_app
 flutter pub get
 flutter run -d chrome  # Web
 flutter run            # Mobile
@@ -83,21 +83,27 @@ vibeshield-ai/
 ## Core Features
 1. Real-time sentiment monitoring (Cryptoracle)
 2. AI-powered risk analysis (Kalibr)
-3. Non-custodial emergency swap trigger (via on-chain vault)
-4. Vibe Meter dashboard
-5. Multi-agent strategy (Bull vs Bear)
+3. Agent Demo on BSC Testnet (spawn, approve, protection execution)
+4. Monitor loop with subscription-based auto execution + cooldown guard
+5. Vibe dashboard (Market Pulse, multi-token sentiment, tx history)
 
 ## What’s actually implemented
 - **Backend API** running on Railway with `/health` and `/api/vibe/*` routes.
 - **Risk pipeline (API-level):** `/api/vibe/check` calls Cryptoracle + CoinGecko, then sends a prompt to Kalibr and returns `{ sentiment, price, analysis }`.
-- **Non-custodial execution (contract + API):** the backend can call the vault function `executeEmergencySwap(user, token, amountIn)` and returns a `txHash` on success.
+- **Agent-first execution path:** backend uses Router-based protection execution for the BSC Testnet demo flow, with on-chain `txHash` proofs.
 - **Multi-user subscriptions:** `/api/vibe/subscribe`, `/api/vibe/subscriptions`, and `/api/vibe/run-once`.
+- **Monitor safety guards:** per-subscription cooldown and overlap prevention to avoid repeated rapid executions.
 - **Agent Demo flow (BSC Testnet):**
 	- Step 1 activate agent (spawn)
 	- Step 2 approve WBNB to router
 	- Step 3 manual override execute protection
 	- On-chain status sync (`agent active`, `approval`, balances) shown in UI.
 	- Built-in demo helper: `Get demo WBNB` (backend wraps/transfers WBNB for demo readiness).
+	- Pre-connect landing hero in web UI to explain value before wallet connect.
+
+### Notes
+- `POST /api/vibe/execute-swap` (vault path) remains available for legacy/manual flows.
+- Emergency Swap UI section is currently hidden in web by default to keep demo focus on the Agent flow.
 
 
 

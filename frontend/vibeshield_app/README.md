@@ -16,7 +16,8 @@ flutter run -d chrome
 
 ### Production config (no localhost)
 
-By default, **debug** runs use `http://localhost:3000`.
+By default, the app points to the deployed backend origin configured in `lib/core/config.dart`.
+Use `--dart-define=API_BASE_URL=...` to override per environment.
 
 For production run with `--dart-define`:
 
@@ -62,13 +63,14 @@ flutter build ios --release
 
 ## Features
 
-- 🎯 Real-time Vibe Meter (Sentiment visualization)
-- 📊 Price & Volume tracking
-- 🤖 AI-powered risk analysis
-- 🔄 Emergency swap execution
-- 📱 Responsive design (Web + Mobile)
-- 🛡️ Agent setup flow with on-chain status (Activate → Approve → Manual Override)
-- 💧 Demo WBNB helper (`Get demo WBNB`) to reduce setup friction during demos
+- Real-time Vibe Meter (sentiment visualization)
+- Price and volume tracking
+- AI-powered risk analysis
+- Agent-first UX with pre-connect landing hero
+- Responsive design (Web + Mobile)
+- Agent setup flow with on-chain status (Activate → Approve → Manual Override)
+- Demo WBNB helper (`Get demo WBNB`) to reduce setup friction during demos
+- Explorer-ready tx history links
 
 ## API used by the app
 
@@ -86,6 +88,11 @@ flutter build ios --release
 - **Step 2 — Approve WBNB:** grant router allowance to protect funds.
 - **Step 3 — Manual Override:** execute protection from backend guardian.
 - UI shows live status (`agent active`, `approved`, `user WBNB`, `demo faucet WBNB`) to avoid blind clicks.
+
+### UI status note
+
+- Emergency Swap section is currently hidden in web by default to keep user focus on the Agent Demo flow.
+- The API route still exists for legacy/manual testing.
 
 ### Why WBNB (not tBNB) for approve?
 
