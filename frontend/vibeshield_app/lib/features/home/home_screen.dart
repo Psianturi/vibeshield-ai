@@ -2,21 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/vibe_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/tx_history_provider.dart';
-import '../../providers/market_prices_provider.dart';
 import '../../providers/insights_provider.dart' as insights;
 import '../../core/config.dart';
 import '../../core/agent_demo.dart';
 import '../dashboard/vibe_meter_widget.dart';
 import '../dashboard/sentiment_insights_widget.dart';
 import '../dashboard/multi_token_dashboard_widget.dart';
+import 'agent_profile_dialog.dart';
+import 'market_pulse_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -26,7 +25,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  static const bool _showEmergencySwap = false;
   static const String _tightAgentAvatarAssetPath = 'assets/tight_agent.png';
   static const String _looseAgentAvatarAssetPath = 'assets/loose_agent.png';
 
@@ -181,262 +179,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Status indicators
     final String statusIndicator =
-        step2Done ? '🟢 ONLINE' : '🟡 DORMANT';
+        step2Done ? 'ðŸŸ¢ ONLINE' : 'ðŸŸ¡ DORMANT';
     final String protectionStatus =
-        step2Done ? '🛡️ PROTECTED' : '⏳ PENDING';
+        step2Done ? 'ðŸ›¡ï¸ PROTECTED' : 'â³ PENDING';
     final String gasTank =
-        '⛽ ${userWbnb.isEmpty ? '0' : userWbnb} BNB';
+        'â›½ ${userWbnb.isEmpty ? '0' : userWbnb} BNB';
 
     showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return Dialog(
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          backgroundColor: scheme.surfaceContainerHigh,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Close button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        tooltip: 'Close',
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Circular avatar with border
-                  Container(
-                    width: 180,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: borderColor,
-                        width: 3.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: borderColor.withValues(alpha: 0.25),
-                          blurRadius: 20,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        avatarPath,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: scheme.surfaceContainerHighest
-                                .withValues(alpha: 0.35),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.shield_outlined,
-                              size: 72,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Agent name (unique based on strategy)
-                  Text(
-                    agentName,
-                    textAlign: TextAlign.center,
-                    style: textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Strategy label
-                  Text(
-                    'Strategy: $strategyLabel',
-                    textAlign: TextAlign.center,
-                    style: textTheme.labelMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Flavor text / Lore
-                  Text(
-                    flavorText,
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      height: 1.5,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Divider
-                  Divider(
-                    color: scheme.outlineVariant.withValues(alpha: 0.3),
-                    height: 1,
-                  ),
-                  const SizedBox(height: 18),
-
-                  // RPG-style stats grid
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildStatItem(
-                        icon: Icons.circle,
-                        iconColor: step2Done ? Colors.green : Colors.amber,
-                        label: statusIndicator,
-                        textTheme: textTheme,
-                        scheme: scheme,
-                      ),
-                      _buildStatItem(
-                        icon: Icons.shield,
-                        iconColor: step2Done ? scheme.primary : Colors.grey,
-                        label: protectionStatus,
-                        textTheme: textTheme,
-                        scheme: scheme,
-                      ),
-                      _buildStatItem(
-                        icon: Icons.local_gas_station,
-                        iconColor: scheme.primary,
-                        label: gasTank,
-                        textTheme: textTheme,
-                        scheme: scheme,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Divider
-                  Divider(
-                    color: scheme.outlineVariant.withValues(alpha: 0.3),
-                    height: 1,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Wallet info (only show relevant details when active)
-                  if (step2Done)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        'Wallet: ${_short(userAddress)}',
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Wallet: ${_short(userAddress)}',
-                            textAlign: TextAlign.center,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Complete 2 steps to activate protection',
-                            textAlign: TextAlign.center,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: scheme.error,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-
-                  // Action buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            await Clipboard.setData(
-                                ClipboardData(text: userAddress));
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Wallet address copied'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.copy_outlined, size: 18),
-                          label: const Text('Copy Address'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                          icon: const Icon(Icons.check_circle_outline, size: 18),
-                          label: const Text('Close'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+        return AgentProfileDialog(
+          scheme: scheme,
+          textTheme: textTheme,
+          agentName: agentName,
+          flavorText: flavorText,
+          strategyLabel: strategyLabel,
+          borderColor: borderColor,
+          avatarPath: avatarPath,
+          statusIndicator: statusIndicator,
+          protectionStatus: protectionStatus,
+          gasTank: gasTank,
+          step1Done: step1Done,
+          step2Done: step2Done,
+          userAddress: userAddress,
+          userWbnb: userWbnb,
         );
       },
-    );
-  }
-
-  Widget _buildStatItem({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required TextTheme textTheme,
-    required ColorScheme scheme,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          color: iconColor,
-          size: 20,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
-          ),
-        ),
-      ],
     );
   }
 
@@ -829,9 +598,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              _MarketPulseCard(),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: Column(
+                children: [
+                  MarketPulseCard(),
               const SizedBox(height: 16),
               _buildMultiTokenDashboardCard(),
               const SizedBox(height: 16),
@@ -925,16 +697,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (walletState.isConnected &&
                   (walletState.address?.isNotEmpty ?? false)) ...[
                 const SizedBox(height: 24),
-                if (_showEmergencySwap) ...[
-                  _buildEmergencySwapCard(context, walletState.address!),
-                  const SizedBox(height: 16),
-                ],
                 _buildAgentDemoCard(context, walletState.address!),
+                const SizedBox(height: 16),
+                _buildEmergencySwapCard(context, walletState.address!),
                 const SizedBox(height: 16),
                 _buildTxHistoryCard(context, walletState.address!),
               ]
             ],
           ),
+        ),
+        ),
         ),
       ),
     );
@@ -1302,7 +1074,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 AgentDemoTopUpResult>(
                               title: 'Funding demo WBNB',
                               message:
-                                  'Requesting demo WBNB top-up to your wallet. Please wait…',
+                                  'Requesting demo WBNB top-up to your wallet. Please waitâ€¦',
                               action: () => api.topUpAgentDemoWbnb(
                                 userAddress: userAddress,
                               ),
@@ -1394,7 +1166,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                           BorderRadius.circular(999),
                                                     ),
                                                     child: Text(
-                                                      '⚠️ SIMULATION MODE',
+                                                      'âš ï¸ SIMULATION MODE',
                                                       style: Theme.of(context)
                                                           .textTheme
                                                           .labelSmall
@@ -1407,8 +1179,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 ],
                                                 Text(
                                                   isReady
-                                                      ? '🟢 Agent Active'
-                                                      : '⚠️ Agent Setup Required',
+                                                      ? 'ðŸŸ¢ Agent Active'
+                                                      : 'âš ï¸ Agent Setup Required',
                                                   style: Theme.of(context)
                                                       .textTheme
                                                       .titleMedium
@@ -1544,7 +1316,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ],
                             const SizedBox(height: 12),
                             Text(
-                              'Network: BSC Testnet${feeBnb.isEmpty ? '' : ' • Activation fee: $feeBnb BNB'}',
+                              'Network: BSC Testnet${feeBnb.isEmpty ? '' : ' â€¢ Activation fee: $feeBnb BNB'}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             if (statusSnap.connectionState ==
@@ -1562,15 +1334,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 children: [
                                   Text(
                                     step1Done
-                                        ? '✅ Agent active'
-                                        : '⏳ Agent pending',
+                                        ? 'âœ… Agent active'
+                                        : 'â³ Agent pending',
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
                                   Text(
                                     step2Done
-                                        ? '✅ WBNB approved'
-                                        : '⏳ Approval pending',
+                                        ? 'âœ… WBNB approved'
+                                        : 'â³ Approval pending',
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
@@ -1596,7 +1368,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           ),
                                         )
                                       : const Icon(Icons.water_drop_outlined),
-                                  label: const Text('💧 Top-up WBNB'),
+                                  label: const Text('ðŸ’§ Top-up WBNB'),
                                 ),
                               ),
                               if (!canExecuteByBalance) ...[
@@ -1618,7 +1390,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             const SizedBox(height: 12),
                             if (!step1Done) ...[
                               const Text(
-                                  'Step 1 — Choose strategy and activate agent'),
+                                  'Step 1 â€” Choose strategy and activate agent'),
                               const SizedBox(height: 8),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1629,9 +1401,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     value: _selectedStrategy,
                                     items: const [
                                       DropdownMenuItem(
-                                          value: 1, child: Text('🛡️ Tight')),
+                                          value: 1, child: Text('ðŸ›¡ï¸ Tight')),
                                       DropdownMenuItem(
-                                          value: 2, child: Text('💎 Loose')),
+                                          value: 2, child: Text('ðŸ’Ž Loose')),
                                     ],
                                     onChanged: _agentBusy
                                         ? null
@@ -1772,12 +1544,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             strokeWidth: 2,
                                           ),
                                         )
-                                      : const Text('🛡️ Activate VibeShield'),
+                                      : const Text('ðŸ›¡ï¸ Activate VibeShield'),
                                 ),
                               ),
                             ],
                             if (step1Done && !step2Done) ...[
-                              const Text('Step 2 — Grant WBNB permission'),
+                              const Text('Step 2 â€” Grant WBNB permission'),
                               const SizedBox(height: 8),
                               Text(
                                 'Approve WBNB so the agent can protect your funds when triggered.',
@@ -1924,7 +1696,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             strokeWidth: 2,
                                           ),
                                         )
-                                      : const Text('✅ Approve WBNB'),
+                                      : const Text('âœ… Approve WBNB'),
                                 ),
                               ),
                             if (isReady) ...[
@@ -1963,7 +1735,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               title:
                                                   'Injecting simulation context',
                                               message:
-                                                  'Sending black-swan context to backend. Monitor loop and AI will react automatically…',
+                                                  'Sending black-swan context to backend. Monitor loop and AI will react automaticallyâ€¦',
                                               action: () =>
                                                   api.injectDemoContext(
                                                 token: 'BNB',
@@ -2024,7 +1796,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           ),
                                         )
                                       : const Text(
-                                          '💉 Inject Black Swan Event'),
+                                          'ðŸ’‰ Inject Black Swan Event'),
                                 ),
                               ),
                             ],
@@ -2044,6 +1816,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildEmergencySwapCard(BuildContext context, String userAddress) {
     final api = ref.read(insights.apiServiceProvider);
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     String chainLabelFor(int? chainId) {
       if (chainId == 1) return 'Ethereum';
@@ -2094,240 +1868,296 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Emergency Swap',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: () async {
-                final filtered =
-                    await api.getTokenPresets(chainId: AppConfig.chainId);
-                if (filtered.isNotEmpty) return filtered;
-                return api.getTokenPresets();
-              }(),
-              builder: (context, snapshot) {
-                final items = snapshot.data ?? const <Map<String, dynamic>>[];
-                String? current;
-                final currentAddress = _tokenAddressController.text.trim();
-                for (final it in items) {
-                  final addr = (it['address'] ?? '').toString().trim();
-                  if (addr.isNotEmpty &&
-                      addr.toLowerCase() == currentAddress.toLowerCase()) {
-                    current = addr;
-                    break;
-                  }
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: scheme.outlineVariant.withValues(alpha: 0.25),
+        ),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        leading: Icon(
+          Icons.swap_horiz_rounded,
+          color: scheme.onSurfaceVariant,
+          size: 22,
+        ),
+        title: Text(
+          'Emergency Swap',
+          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          'Manual guardian swap execution',
+          style: textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontSize: 11,
+          ),
+        ),
+        initiallyExpanded: false,
+        children: [
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: () async {
+              final filtered =
+                  await api.getTokenPresets(chainId: AppConfig.chainId);
+              if (filtered.isNotEmpty) return filtered;
+              return api.getTokenPresets();
+            }(),
+            builder: (context, snapshot) {
+              final items = snapshot.data ?? const <Map<String, dynamic>>[];
+              String? current;
+              final currentAddress = _tokenAddressController.text.trim();
+              for (final it in items) {
+                final addr = (it['address'] ?? '').toString().trim();
+                if (addr.isNotEmpty &&
+                    addr.toLowerCase() == currentAddress.toLowerCase()) {
+                  current = addr;
+                  break;
                 }
+              }
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (items.isNotEmpty) ...[
-                      DropdownButtonFormField<String>(
-                        value: current,
-                        decoration: const InputDecoration(
-                          labelText: 'Token Preset',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: items.map((it) {
-                          final symbol = (it['symbol'] ?? '').toString().trim();
-                          final name = (it['name'] ?? symbol).toString().trim();
-                          final addr = (it['address'] ?? '').toString().trim();
-                          final chainId = it['chainId'] is num
-                              ? (it['chainId'] as num).toInt()
-                              : null;
-                          final chainLabel = chainLabelFor(chainId);
-
-                          final title =
-                              symbol.isNotEmpty ? '$symbol — $name' : name;
-                          final subtitle =
-                              chainLabel.isNotEmpty ? '($chainLabel)' : '';
-
-                          return DropdownMenuItem<String>(
-                            value: addr,
-                            child: Text(
-                              subtitle.isNotEmpty ? '$title $subtitle' : title,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }).toList(growable: false),
-                        onChanged: (addr) {
-                          if (addr == null || addr.trim().isEmpty) return;
-                          setState(() {
-                            _tokenAddressController.text = addr.trim();
-                          });
-                        },
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (items.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      value: current,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'Token Preset',
+                        border: const OutlineInputBorder(),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        labelStyle: textTheme.bodySmall,
                       ),
-                      const SizedBox(height: 12),
-                    ],
-                    RawAutocomplete<Map<String, dynamic>>(
-                      textEditingController: _tokenAddressController,
-                      focusNode: _tokenAddressFocusNode,
-                      displayStringForOption: (option) =>
-                          (option['address'] ?? '').toString().trim(),
-                      optionsBuilder: (textEditingValue) =>
-                          filterPresetOptions(items, textEditingValue.text),
-                      onSelected: (option) {
-                        final addr =
-                            (option['address'] ?? '').toString().trim();
-                        if (addr.isEmpty) return;
+                      items: items.map((it) {
+                        final symbol = (it['symbol'] ?? '').toString().trim();
+                        final name = (it['name'] ?? symbol).toString().trim();
+                        final addr = (it['address'] ?? '').toString().trim();
+                        final chainId = it['chainId'] is num
+                            ? (it['chainId'] as num).toInt()
+                            : null;
+                        final chainLabel = chainLabelFor(chainId);
+
+                        final title =
+                            symbol.isNotEmpty ? '$symbol â€” $name' : name;
+                        final subtitle =
+                            chainLabel.isNotEmpty ? '($chainLabel)' : '';
+
+                        return DropdownMenuItem<String>(
+                          value: addr,
+                          child: Text(
+                            subtitle.isNotEmpty ? '$title $subtitle' : title,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodySmall,
+                          ),
+                        );
+                      }).toList(growable: false),
+                      onChanged: (addr) {
+                        if (addr == null || addr.trim().isEmpty) return;
                         setState(() {
-                          _tokenAddressController.text = addr;
+                          _tokenAddressController.text = addr.trim();
                         });
                       },
-                      fieldViewBuilder: (context, textEditingController,
-                          focusNode, onFieldSubmitted) {
-                        return TextField(
-                          controller: textEditingController,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(
-                            labelText: 'Token Address (ERC20)',
-                            border: OutlineInputBorder(),
-                            helperText:
-                                'Type 0x… or search by name/symbol (e.g. sepo)',
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  RawAutocomplete<Map<String, dynamic>>(
+                    textEditingController: _tokenAddressController,
+                    focusNode: _tokenAddressFocusNode,
+                    displayStringForOption: (option) =>
+                        (option['address'] ?? '').toString().trim(),
+                    optionsBuilder: (textEditingValue) =>
+                        filterPresetOptions(items, textEditingValue.text),
+                    onSelected: (option) {
+                      final addr =
+                          (option['address'] ?? '').toString().trim();
+                      if (addr.isEmpty) return;
+                      setState(() {
+                        _tokenAddressController.text = addr;
+                      });
+                    },
+                    fieldViewBuilder: (context, textEditingController,
+                        focusNode, onFieldSubmitted) {
+                      return TextField(
+                        controller: textEditingController,
+                        focusNode: focusNode,
+                        style: textTheme.bodySmall,
+                        decoration: InputDecoration(
+                          labelText: 'Token Address (ERC20)',
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          labelStyle: textTheme.bodySmall,
+                          helperText:
+                              'Type 0xâ€¦ or search by name/symbol',
+                          helperStyle: textTheme.bodySmall?.copyWith(
+                            fontSize: 10,
+                            color: scheme.onSurfaceVariant,
                           ),
-                        );
-                      },
-                      optionsViewBuilder: (context, onSelected, options) {
-                        return Align(
-                          alignment: Alignment.topLeft,
-                          child: Material(
-                            elevation: 4,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                  maxHeight: 240, maxWidth: 520),
-                              child: ListView.builder(
-                                padding: EdgeInsets.zero,
-                                shrinkWrap: true,
-                                itemCount: options.length,
-                                itemBuilder: (context, index) {
-                                  final it = options.elementAt(index);
-                                  final symbol =
-                                      (it['symbol'] ?? '').toString().trim();
-                                  final name =
-                                      (it['name'] ?? symbol).toString().trim();
-                                  final addr =
-                                      (it['address'] ?? '').toString().trim();
-                                  final chainId = it['chainId'] is num
-                                      ? (it['chainId'] as num).toInt()
-                                      : null;
-                                  final chainLabel = chainLabelFor(chainId);
+                        ),
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4,
+                          borderRadius: BorderRadius.circular(8),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                                maxHeight: 200, maxWidth: 480),
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (context, index) {
+                                final it = options.elementAt(index);
+                                final symbol =
+                                    (it['symbol'] ?? '').toString().trim();
+                                final name =
+                                    (it['name'] ?? symbol).toString().trim();
+                                final addr =
+                                    (it['address'] ?? '').toString().trim();
+                                final chainId = it['chainId'] is num
+                                    ? (it['chainId'] as num).toInt()
+                                    : null;
+                                final chainLabel = chainLabelFor(chainId);
 
-                                  final title = symbol.isNotEmpty
-                                      ? '$symbol — $name'
-                                      : name;
-                                  final subtitleParts = <String>[];
-                                  if (chainLabel.isNotEmpty) {
-                                    subtitleParts.add(chainLabel);
-                                  }
-                                  if (addr.isNotEmpty) subtitleParts.add(addr);
+                                final title = symbol.isNotEmpty
+                                    ? '$symbol â€” $name'
+                                    : name;
+                                final subtitleParts = <String>[];
+                                if (chainLabel.isNotEmpty) {
+                                  subtitleParts.add(chainLabel);
+                                }
+                                if (addr.isNotEmpty) subtitleParts.add(addr);
 
-                                  return ListTile(
-                                    dense: true,
-                                    title: Text(title,
-                                        overflow: TextOverflow.ellipsis),
-                                    subtitle: subtitleParts.isEmpty
-                                        ? null
-                                        : Text(
-                                            subtitleParts.join(' • '),
-                                            overflow: TextOverflow.ellipsis,
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(title,
+                                      style: textTheme.bodySmall,
+                                      overflow: TextOverflow.ellipsis),
+                                  subtitle: subtitleParts.isEmpty
+                                      ? null
+                                      : Text(
+                                          subtitleParts.join(' â€¢ '),
+                                          style: textTheme.bodySmall?.copyWith(
+                                            fontSize: 10,
+                                            color: scheme.onSurfaceVariant,
                                           ),
-                                    onTap: () => onSelected(it),
-                                  );
-                                },
-                              ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                  onTap: () => onSelected(it),
+                                );
+                              },
                             ),
                           ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _amountController,
+            style: textTheme.bodySmall,
+            decoration: InputDecoration(
+              labelText: 'Amount (human readable)',
+              border: const OutlineInputBorder(),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              labelStyle: textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.errorContainer,
+                foregroundColor: scheme.onErrorContainer,
+                textStyle:
+                    textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              onPressed: _isSwapping
+                  ? null
+                  : () async {
+                      final tokenAddress =
+                          _tokenAddressController.text.trim();
+                      final amount = _amountController.text.trim();
+
+                      if (tokenAddress.isEmpty || amount.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  'Token address and amount are required.')),
                         );
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: 'Amount (human readable)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isSwapping
-                    ? null
-                    : () async {
-                        final tokenAddress =
-                            _tokenAddressController.text.trim();
-                        final amount = _amountController.text.trim();
+                        return;
+                      }
 
-                        if (tokenAddress.isEmpty || amount.isEmpty) {
+                      setState(() => _isSwapping = true);
+                      try {
+                        final result = await api.executeSwap(
+                          userAddress: userAddress,
+                          tokenAddress: tokenAddress,
+                          amount: amount,
+                        );
+
+                        if (!context.mounted) return;
+
+                        final txHash = result['txHash'];
+                        if (txHash != null &&
+                            txHash is String &&
+                            txHash.isNotEmpty) {
+                          ref.invalidate(txHistoryProvider(userAddress));
+                          final url = _explorerTxUrl(txHash);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
+                            SnackBar(
+                              content: Text('Swap submitted: ${url.isNotEmpty ? url : txHash}'),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
                                 content: Text(
-                                    'Token address and amount are required.')),
+                                    'Swap result: ${result.toString()}')),
                           );
-                          return;
                         }
-
-                        setState(() => _isSwapping = true);
-                        try {
-                          final result = await api.executeSwap(
-                            userAddress: userAddress,
-                            tokenAddress: tokenAddress,
-                            amount: amount,
-                          );
-
-                          if (!context.mounted) return;
-
-                          final txHash = result['txHash'];
-                          if (txHash != null &&
-                              txHash is String &&
-                              txHash.isNotEmpty) {
-                            ref.invalidate(txHistoryProvider(userAddress));
-                            final url = AppConfig.explorerTxBaseUrl.isNotEmpty
-                                ? '${AppConfig.explorerTxBaseUrl}$txHash'
-                                : txHash;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Swap submitted: $url')),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text(
-                                      'Swap result: ${result.toString()}')),
-                            );
-                          }
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Swap failed: $e')),
-                          );
-                        } finally {
-                          if (mounted) setState(() => _isSwapping = false);
-                        }
-                      },
-                child: _isSwapping
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Execute Emergency Swap (Guardian)'),
-              ),
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Swap failed: $e')),
+                        );
+                      } finally {
+                        if (mounted) setState(() => _isSwapping = false);
+                      }
+                    },
+              icon: _isSwapping
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.flash_on, size: 18),
+              label: Text(_isSwapping ? 'Executing...' : 'Execute Swap'),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Note: This triggers the backend guardian to call the vault. You still need on-chain approval + vault config on the user wallet.',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Guardian triggers vault swap on-chain. Requires prior approval and vault config.',
+            style: textTheme.bodySmall?.copyWith(
+              fontSize: 10,
+              color: scheme.onSurfaceVariant,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -2373,7 +2203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           contentPadding: EdgeInsets.zero,
                           title: Text(_short(t.txHash)),
                           subtitle: Text(
-                            '${DateTime.fromMillisecondsSinceEpoch(t.timestamp).toLocal()} • ${t.source}',
+                            '${DateTime.fromMillisecondsSinceEpoch(t.timestamp).toLocal()} â€¢ ${t.source}',
                           ),
                           trailing: TextButton(
                             onPressed: () => _openExplorerTx(t.txHash),
@@ -2405,7 +2235,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Text('Model: ${result.analysis.aiModel}'),
             Text('Risk Score: ${result.analysis.riskScore.toStringAsFixed(1)}'),
             Text(
-                'Action: ${result.analysis.shouldExit ? "🚨 EXIT" : "✅ HOLD"}'),
+                'Action: ${result.analysis.shouldExit ? "ðŸš¨ EXIT" : "âœ… HOLD"}'),
             const SizedBox(height: 8),
             Text(result.analysis.reason),
           ],
@@ -2457,202 +2287,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _short(String s) {
     if (s.length <= 12) return s;
     return '${s.substring(0, 6)}...${s.substring(s.length - 4)}';
-  }
-}
-
-class _MarketPulseCard extends ConsumerWidget {
-  _MarketPulseCard();
-
-  static const _order = <String>[
-    'bitcoin',
-    'binancecoin',
-    'ethereum',
-    'tether'
-  ];
-
-  static const _labels = <String, String>{
-    'bitcoin': 'BTC',
-    'binancecoin': 'BNB',
-    'ethereum': 'ETH',
-    'tether': 'USDT',
-  };
-
-  final _money = NumberFormat.currency(symbol: r'$', decimalDigits: 2);
-  final _compact = NumberFormat.compactCurrency(symbol: r'$', decimalDigits: 2);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final pricesAsync = ref.watch(marketPricesProvider);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Market Pulse',
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Realtime from CoinGecko',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isNarrow = constraints.maxWidth < 560;
-                final cols = isNarrow ? 2 : 4;
-                const spacing = 12.0;
-                final tileWidth =
-                    (constraints.maxWidth - (spacing * (cols - 1))) / cols;
-
-                return pricesAsync.when(
-                  data: (items) {
-                    final byId = {for (final it in items) it.token: it};
-
-                    return Wrap(
-                      spacing: spacing,
-                      runSpacing: spacing,
-                      children: _order.map((id) {
-                        final label = _labels[id] ?? id.toUpperCase();
-                        final data = byId[id];
-                        return SizedBox(
-                          width: tileWidth,
-                          child: _MarketTile(
-                            label: label,
-                            price: data?.price,
-                            change24h: data?.priceChange24h,
-                            formatter: label == 'USDT' ? _money : _compact,
-                          ),
-                        );
-                      }).toList(growable: false),
-                    );
-                  },
-                  loading: () {
-                    return Wrap(
-                      spacing: spacing,
-                      runSpacing: spacing,
-                      children: _order.map((id) {
-                        final label = _labels[id] ?? id.toUpperCase();
-                        return SizedBox(
-                          width: tileWidth,
-                          child: _MarketTile(
-                            label: label,
-                            price: null,
-                            change24h: null,
-                            formatter: _compact,
-                            isLoading: true,
-                          ),
-                        );
-                      }).toList(growable: false),
-                    );
-                  },
-                  error: (_, __) {
-                    return Text(
-                      'Failed to load market prices.',
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: scheme.error),
-                    );
-                  },
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MarketTile extends StatelessWidget {
-  const _MarketTile({
-    required this.label,
-    required this.price,
-    required this.change24h,
-    required this.formatter,
-    this.isLoading = false,
-  });
-
-  final String label;
-  final double? price;
-  final double? change24h;
-  final NumberFormat formatter;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    final change = change24h;
-    final isUp = (change ?? 0) >= 0;
-    final accent = change == null
-        ? scheme.onSurfaceVariant
-        : (isUp ? scheme.tertiary : scheme.error);
-
-    final priceText =
-        isLoading ? '—' : (price == null ? '—' : formatter.format(price));
-
-    final changeText = isLoading
-        ? '…'
-        : (change == null ? '—' : '${change.toStringAsFixed(2)}%');
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            priceText,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(
-                isLoading
-                    ? Icons.sync
-                    : (change == null
-                        ? Icons.remove
-                        : (isUp ? Icons.trending_up : Icons.trending_down)),
-                size: 16,
-                color: accent,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                changeText,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: accent,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }
 
