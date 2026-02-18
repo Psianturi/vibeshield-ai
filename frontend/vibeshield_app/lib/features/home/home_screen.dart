@@ -11,9 +11,11 @@ import '../../providers/tx_history_provider.dart';
 import '../../providers/insights_provider.dart' as insights;
 import '../../core/config.dart';
 import '../../core/agent_demo.dart';
+import '../../services/notification_service.dart';
 import '../dashboard/vibe_meter_widget.dart';
 import '../dashboard/sentiment_insights_widget.dart';
 import '../dashboard/multi_token_dashboard_widget.dart';
+import '../notifications/notification_panel.dart';
 import 'agent_profile_dialog.dart';
 import 'market_pulse_card.dart';
 
@@ -49,6 +51,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<AgentDemoStatus?>? _agentStatusFuture;
   Future<AgentDemoContext?>? _agentDemoContextFuture;
 
+  // --- Auto-poll & heartbeat state ---
+  Timer? _postInjectPollTimer;
+  int _postInjectPollCount = 0;
+  int _lastKnownTxCount = -1;
+  Timer? _heartbeatTimer;
+  String _heartbeatText = 'Monitoring...';
+  final _notifService = NotificationService.instance;
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +70,143 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final walletService = ref.read(walletServiceProvider);
       _wcUriSub = walletService.wcUriStream.listen(_showWalletConnectQr);
     }
+
+    // Start heartbeat animation cycle.
+    _startHeartbeat();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Heartbeat indicator — cycles through scanning messages
+  // ---------------------------------------------------------------------------
+  void _startHeartbeat() {
+    const messages = [
+      'Monitoring...',
+      'Scanning sentiment...',
+      'Analyzing risk signals...',
+      'Checking CoinGecko data...',
+      'Querying Cryptoracle...',
+      'AI evaluating threats...',
+    ];
+    var idx = 0;
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      idx = (idx + 1) % messages.length;
+      setState(() => _heartbeatText = messages[idx]);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto-poll after injection — detect new tx and fire toast chain
+  // ---------------------------------------------------------------------------
+  void _startPostInjectionPolling(String userAddress) {
+    _stopPostInjectionPolling();
+    _postInjectPollCount = 0;
+
+    // Show first toast immediately.
+    _notifService.push(
+      title: 'Injection Sent',
+      body: 'Simulating Black Swan Event. AI Guardian is analyzing...',
+      level: NotifLevel.warning,
+      browserPush: false,
+    );
+
+    // Fake "analyzing" toast after 8 seconds.
+    Future.delayed(const Duration(seconds: 8), () {
+      if (!mounted || _postInjectPollTimer == null) return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('AI Guardian is analyzing the injected scenario...')),
+              ],
+            ),
+            backgroundColor: Colors.blueAccent,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+
+    _postInjectPollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      _postInjectPollCount++;
+
+      // Safety: stop after 90 seconds (18 ticks).
+      if (_postInjectPollCount > 18) {
+        _stopPostInjectionPolling();
+        return;
+      }
+
+      try {
+        final api = ref.read(insights.apiServiceProvider);
+        final history = await api.getTxHistory(userAddress: userAddress, limit: 5);
+
+        if (_lastKnownTxCount >= 0 && history.length > _lastKnownTxCount) {
+          // NEW TRANSACTION DETECTED!
+          _stopPostInjectionPolling();
+
+          final latestTx = history.first;
+          final shortHash = latestTx.txHash.length > 12
+              ? '${latestTx.txHash.substring(0, 6)}...${latestTx.txHash.substring(latestTx.txHash.length - 4)}'
+              : latestTx.txHash;
+
+          // Push in-app + browser notification.
+          _notifService.push(
+            title: 'THREAT NEUTRALIZED!',
+            body: 'Emergency Swap Executed. Tx: $shortHash',
+            level: NotifLevel.critical,
+            txHash: latestTx.txHash,
+            browserPush: true,
+          );
+
+          // Show prominent toast.
+          if (mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.shield, color: Colors.white),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'THREAT NEUTRALIZED! Emergency Swap Executed.\nTx: $shortHash',
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.green.shade700,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 8),
+              ),
+            );
+          }
+
+          // Auto-refresh tx history & agent status in UI.
+          ref.invalidate(txHistoryProvider(userAddress));
+          if (mounted) {
+            setState(() {
+              _agentStatusFuture = api.getAgentDemoStatus(userAddress: userAddress);
+              _agentDemoContextFuture = api.getDemoContext();
+            });
+          }
+        }
+
+        _lastKnownTxCount = history.length;
+      } catch (_) {
+        // Silently continue polling.
+      }
+    });
+  }
+
+  void _stopPostInjectionPolling() {
+    _postInjectPollTimer?.cancel();
+    _postInjectPollTimer = null;
   }
 
   String _explorerTxUrl(String txHash, {int? chainId}) {
@@ -179,11 +326,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Status indicators
     final String statusIndicator =
-        step2Done ? 'ðŸŸ¢ ONLINE' : 'ðŸŸ¡ DORMANT';
+        step2Done ? 'ONLINE' : 'DORMANT';
     final String protectionStatus =
-        step2Done ? 'ðŸ›¡ï¸ PROTECTED' : 'â³ PENDING';
+        step2Done ? 'PROTECTED' : ' PENDING';
     final String gasTank =
-        'â›½ ${userWbnb.isEmpty ? '0' : userWbnb} BNB';
+        '${userWbnb.isEmpty ? '0' : userWbnb} BNB';
 
     showDialog<void>(
       context: context,
@@ -556,6 +703,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _tokenIdFocusNode.dispose();
     _tokenAddressFocusNode.dispose();
     _wcUriSub?.cancel();
+    _postInjectPollTimer?.cancel();
+    _heartbeatTimer?.cancel();
     super.dispose();
   }
 
@@ -570,6 +719,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('VibeShield AI'),
         centerTitle: false,
         actions: [
+          const NotificationBellButton(),
           if (walletState.isConnected)
             IconButton(
               tooltip: 'Disconnect wallet',
@@ -1074,7 +1224,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 AgentDemoTopUpResult>(
                               title: 'Funding demo WBNB',
                               message:
-                                  'Requesting demo WBNB top-up to your wallet. Please waitâ€¦',
+                                  'Requesting demo WBNB top-up to your wallet. Please wait...',
                               action: () => api.topUpAgentDemoWbnb(
                                 userAddress: userAddress,
                               ),
@@ -1179,7 +1329,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 ],
                                                 Text(
                                                   isReady
-                                                      ? 'ðŸŸ¢ Agent Active'
+                                                      ? 'Agent Active'
                                                       : 'âš ï¸ Agent Setup Required',
                                                   style: Theme.of(context)
                                                       .textTheme
@@ -1212,6 +1362,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             .textTheme
                                             .bodySmall,
                                       ),
+                                      if (isReady) ...[  
+                                        const SizedBox(height: 8),
+                                        _AgentHeartbeatIndicator(text: _heartbeatText),
+                                      ],
                                       const SizedBox(height: 6),
                                       Text(
                                         'Click to view agent identity.',
@@ -1316,7 +1470,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ],
                             const SizedBox(height: 12),
                             Text(
-                              'Network: BSC Testnet${feeBnb.isEmpty ? '' : ' â€¢ Activation fee: $feeBnb BNB'}',
+                              'Network: BSC Testnet${feeBnb.isEmpty ? '' : ' · Activation fee: $feeBnb BNB'}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             if (statusSnap.connectionState ==
@@ -1334,15 +1488,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 children: [
                                   Text(
                                     step1Done
-                                        ? 'âœ… Agent active'
-                                        : 'â³ Agent pending',
+                                        ? ' Agent active'
+                                        : ' Agent pending',
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
                                   Text(
                                     step2Done
-                                        ? 'âœ… WBNB approved'
-                                        : 'â³ Approval pending',
+                                        ? ' WBNB approved'
+                                        : ' Approval pending',
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
@@ -1368,13 +1522,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           ),
                                         )
                                       : const Icon(Icons.water_drop_outlined),
-                                  label: const Text('ðŸ’§ Top-up WBNB'),
+                                  label: const Text('Top-up WBNB'),
                                 ),
                               ),
                               if (!canExecuteByBalance) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Need testnet funds? Tap Top-up WBNB.',
+                                  'Need testnet funds? TapTop-up WBNB.',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                               ],
@@ -1401,7 +1555,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     value: _selectedStrategy,
                                     items: const [
                                       DropdownMenuItem(
-                                          value: 1, child: Text('ðŸ›¡ï¸ Tight')),
+                                          value: 1, child: Text('Tight')),
                                       DropdownMenuItem(
                                           value: 2, child: Text('ðŸ’Ž Loose')),
                                     ],
@@ -1544,7 +1698,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             strokeWidth: 2,
                                           ),
                                         )
-                                      : const Text('ðŸ›¡ï¸ Activate VibeShield'),
+                                      : const Text('Activate VibeShield'),
                                 ),
                               ),
                             ],
@@ -1735,7 +1889,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               title:
                                                   'Injecting simulation context',
                                               message:
-                                                  'Sending black-swan context to backend. Monitor loop and AI will react automaticallyâ€¦',
+                                                  'Sending black-swan context to backend. Monitor loop and AI will react automatically...',
                                               action: () =>
                                                   api.injectDemoContext(
                                                 token: 'BNB',
@@ -1761,9 +1915,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 .showSnackBar(
                                               const SnackBar(
                                                 content: Text(
-                                                    'News injected. Watch the AI monitor react on next cycle.'),
+                                                    'News injected! AI Guardian will react automatically...'),
+                                                backgroundColor: Colors.deepOrange,
                                               ),
                                             );
+
+                                            // Capture current tx count for comparison.
+                                            try {
+                                              final currentHistory = await api.getTxHistory(userAddress: userAddress, limit: 5);
+                                              _lastKnownTxCount = currentHistory.length;
+                                            } catch (_) {
+                                              _lastKnownTxCount = 0;
+                                            }
+
+                                            // Start auto-polling to detect execution.
+                                            _startPostInjectionPolling(userAddress);
 
                                             refreshAgentStatus();
                                             ref.invalidate(
@@ -1796,7 +1962,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           ),
                                         )
                                       : const Text(
-                                          'ðŸ’‰ Inject Black Swan Event'),
+                                          'Inject Black Swan Event'),
                                 ),
                               ),
                             ],
@@ -1992,7 +2158,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               horizontal: 12, vertical: 10),
                           labelStyle: textTheme.bodySmall,
                           helperText:
-                              'Type 0xâ€¦ or search by name/symbol',
+                              'Type 0x... or search by name/symbol',
                           helperStyle: textTheme.bodySmall?.copyWith(
                             fontSize: 10,
                             color: scheme.onSurfaceVariant,
@@ -2043,7 +2209,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   subtitle: subtitleParts.isEmpty
                                       ? null
                                       : Text(
-                                          subtitleParts.join(' â€¢ '),
+                                          subtitleParts.join(' · '),
                                           style: textTheme.bodySmall?.copyWith(
                                             fontSize: 10,
                                             color: scheme.onSurfaceVariant,
@@ -2203,7 +2369,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           contentPadding: EdgeInsets.zero,
                           title: Text(_short(t.txHash)),
                           subtitle: Text(
-                            '${DateTime.fromMillisecondsSinceEpoch(t.timestamp).toLocal()} â€¢ ${t.source}',
+                            '${DateTime.fromMillisecondsSinceEpoch(t.timestamp).toLocal()} · ${t.source}',
                           ),
                           trailing: TextButton(
                             onPressed: () => _openExplorerTx(t.txHash),
@@ -2235,7 +2401,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Text('Model: ${result.analysis.aiModel}'),
             Text('Risk Score: ${result.analysis.riskScore.toStringAsFixed(1)}'),
             Text(
-                'Action: ${result.analysis.shouldExit ? "ðŸš¨ EXIT" : "âœ… HOLD"}'),
+                'Action: ${result.analysis.shouldExit ? "EXIT" : "âœ… HOLD"}'),
             const SizedBox(height: 8),
             Text(result.analysis.reason),
           ],
@@ -2306,6 +2472,61 @@ class _ScanningButtonLabel extends StatelessWidget {
         SizedBox(width: 10),
         Text('Scanning Social Signals...'),
       ],
+    );
+  }
+}
+
+/// Animated heartbeat-style text indicator shown when agent is active.
+class _AgentHeartbeatIndicator extends StatefulWidget {
+  const _AgentHeartbeatIndicator({required this.text});
+  final String text;
+
+  @override
+  State<_AgentHeartbeatIndicator> createState() =>
+      _AgentHeartbeatIndicatorState();
+}
+
+class _AgentHeartbeatIndicatorState extends State<_AgentHeartbeatIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _opacity = Tween<double>(begin: 0.35, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.sensors, size: 14, color: Colors.green.shade400),
+          const SizedBox(width: 6),
+          Text(
+            widget.text,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.green.shade400,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -122,13 +122,5 @@ vibeshield-ai/
 - **Responsive UI:** Mobile-optimized with `ConstrainedBox(maxWidth: 800)`, scrollable dialogs
 - **Modular codebase:** `AgentProfileDialog`, `MarketPulseCard` extracted as standalone widgets
 
-### Recent Updates
-
-- ✅ Emergency Swap unhidden as collapsible ExpansionTile
-- ✅ Animated glow effect on agent profile avatar (2s pulse cycle)
-- ✅ Mobile responsive optimizations (dialog scroll, adaptive sizing)
-- ✅ Codebase split: `home_screen.dart` reduced from ~2850 → ~2315 lines
-- ✅ Strategy-based agent avatars and RPG-style card redesign
-- ✅ Pre-connect landing hero with step indicators
 
 ---

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'features/navigation/main_navigation.dart';
+import 'services/notification_bootstrap.dart' show configureBrowserNotifications;
 
 void main() {
+  configureBrowserNotifications();
   runApp(const ProviderScope(child: MyApp()));
 }
 
