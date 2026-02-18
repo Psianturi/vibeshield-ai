@@ -119,3 +119,8 @@ final chainsProvider = FutureProvider<List<ChainInfo>>((ref) async {
   final api = ref.watch(apiServiceProvider);
   return api.getChains();
 });
+
+final marketIntelProvider = FutureProvider.autoDispose<MarketIntel>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  return api.getMarketIntel();
+});

@@ -746,4 +746,56 @@ router.get('/chains', (req, res) => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Market Intelligence — premium data for agent users
+// ---------------------------------------------------------------------------
+router.get('/market-intel', async (_req, res) => {
+  try {
+    const cg = getCoingecko();
+    const cr = getCryptoracle();
+    const kalibr = getKalibr();
+
+    // 1) Parallel fetch: CoinGecko prices + Cryptoracle sentiment for BNB
+    const [prices, sentiment] = await Promise.all([
+      cg.getPrices(['bitcoin', 'ethereum', 'binancecoin']),
+      cr.getSentiment('BNB').catch(() => ({ token: 'BNB', score: 50, timestamp: Date.now(), sources: [] })),
+    ]);
+
+    const findPrice = (id: string) => prices.find((p) => p.token === id);
+    const btc = findPrice('bitcoin');
+    const eth = findPrice('ethereum');
+    const bnb = findPrice('binancecoin');
+
+    const marketData = {
+      btc: btc ? { price: btc.price, change24h: btc.priceChange24h, volume24h: btc.volume24h } : null,
+      eth: eth ? { price: eth.price, change24h: eth.priceChange24h, volume24h: eth.volume24h } : null,
+      bnb: bnb ? { price: bnb.price, change24h: bnb.priceChange24h, volume24h: bnb.volume24h } : null,
+      sentimentScore: sentiment.score,
+      sentimentLabel: sentiment.score >= 65 ? 'Bullish' : sentiment.score <= 35 ? 'Bearish' : 'Neutral',
+    };
+
+    // 2) AI brief — quick 1-sentence market insight from Gemini via Kalibr
+    let aiBrief = 'Agent is calibrating sensors...';
+    try {
+      aiBrief = await kalibr.generateMarketBrief(marketData);
+    } catch (e: any) {
+      console.warn('[market-intel] AI brief failed:', e.message);
+    }
+
+    res.json({
+      ok: true,
+      ...marketData,
+      aiBrief,
+      updatedAt: Date.now(),
+    });
+  } catch (error: any) {
+    console.error('[market-intel] Error:', error.message);
+    res.status(500).json({
+      ok: false,
+      error: error.message,
+      aiBrief: 'Intel temporarily unavailable. Agent sensors recalibrating...',
+    });
+  }
+});
+
 export default router;

@@ -44,6 +44,8 @@ class AppConfig {
 
   static const String marketPricesEndpoint = '/vibe/prices';
 
+  static const String marketIntelEndpoint = '/vibe/market-intel';
+
   static const String txHistoryEndpoint = '/vibe/tx-history';
 
   static const String rpcUrl = String.fromEnvironment(

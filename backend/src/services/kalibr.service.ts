@@ -312,4 +312,49 @@ Should we exit position? Respond with JSON: {riskScore: 0-100, shouldExit: boole
       };
     }
   }
+
+  /**
+   * Generate a concise 1-sentence market brief for the Agent Intel Feed.
+   * Uses Gemini via Kalibr routing with a lightweight prompt.
+   */
+  async generateMarketBrief(marketData: {
+    btc?: { price: number; change24h: number } | null;
+    eth?: { price: number; change24h: number } | null;
+    bnb?: { price: number; change24h: number } | null;
+    sentimentScore: number;
+    sentimentLabel: string;
+  }): Promise<string> {
+    const btcChange = marketData.btc?.change24h?.toFixed(2) ?? 'N/A';
+    const ethChange = marketData.eth?.change24h?.toFixed(2) ?? 'N/A';
+    const bnbChange = marketData.bnb?.change24h?.toFixed(2) ?? 'N/A';
+
+    const prompt = `You are VibeShield AI, an autonomous crypto portfolio guardian agent on BNB Chain.
+
+Market snapshot:
+- BTC 24h change: ${btcChange}%
+- ETH 24h change: ${ethChange}%
+- BNB 24h change: ${bnbChange}%
+- Social sentiment score: ${marketData.sentimentScore}/100 (${marketData.sentimentLabel})
+
+Task: Give exactly ONE sentence of witty, actionable market insight for a DeFi investor.
+Style: Cyberpunk-professional, concise, confident.
+Max length: 120 characters.
+Do NOT use markdown or quotes. Just the sentence.`;
+
+    try {
+      const decision = await this.decideModel();
+      const modelId = decision?.modelId ?? this.modelLow;
+      const gemini = await this.callGemini(modelId, prompt);
+
+      const text = gemini.text.split('\n')[0].replace(/^["']|["']$/g, '').trim();
+      return text || 'Markets in flux. Stay vigilant, Guardian.';
+    } catch (e: any) {
+      console.warn('[Kalibr] generateMarketBrief failed:', e.message);
+      // Intelligent fallback based on data
+      const score = marketData.sentimentScore;
+      if (score >= 65) return 'Bullish momentum detected. Shields on standby.';
+      if (score <= 35) return 'Bearish signals rising. Guardian shields activated.';
+      return 'Markets in flux. Stay vigilant, Guardian.';
+    }
+  }
 }

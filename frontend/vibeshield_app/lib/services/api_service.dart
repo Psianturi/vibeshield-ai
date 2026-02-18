@@ -425,4 +425,67 @@ class ApiService {
     }
     return out;
   }
+
+  /// Fetch aggregated market intelligence (prices + sentiment + AI brief).
+  Future<MarketIntel> getMarketIntel() async {
+    try {
+      final response = await _dio.get(AppConfig.marketIntelEndpoint);
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return MarketIntel.fromJson(data);
+      }
+      throw Exception('Invalid response format');
+    } catch (e) {
+      throw Exception('Failed to fetch market intel: $e');
+    }
+  }
+}
+
+/// Market intelligence data model.
+class MarketIntel {
+  final CoinIntel? btc;
+  final CoinIntel? eth;
+  final CoinIntel? bnb;
+  final int sentimentScore;
+  final String sentimentLabel;
+  final String aiBrief;
+  final int updatedAt;
+
+  MarketIntel({
+    this.btc,
+    this.eth,
+    this.bnb,
+    this.sentimentScore = 50,
+    this.sentimentLabel = 'Neutral',
+    this.aiBrief = 'Calibrating sensors...',
+    this.updatedAt = 0,
+  });
+
+  factory MarketIntel.fromJson(Map<String, dynamic> json) {
+    return MarketIntel(
+      btc: json['btc'] is Map ? CoinIntel.fromJson(json['btc']) : null,
+      eth: json['eth'] is Map ? CoinIntel.fromJson(json['eth']) : null,
+      bnb: json['bnb'] is Map ? CoinIntel.fromJson(json['bnb']) : null,
+      sentimentScore: (json['sentimentScore'] is num) ? (json['sentimentScore'] as num).toInt() : 50,
+      sentimentLabel: json['sentimentLabel'] as String? ?? 'Neutral',
+      aiBrief: json['aiBrief'] as String? ?? 'Calibrating sensors...',
+      updatedAt: (json['updatedAt'] is num) ? (json['updatedAt'] as num).toInt() : 0,
+    );
+  }
+}
+
+class CoinIntel {
+  final double price;
+  final double change24h;
+  final double volume24h;
+
+  CoinIntel({this.price = 0, this.change24h = 0, this.volume24h = 0});
+
+  factory CoinIntel.fromJson(Map<dynamic, dynamic> json) {
+    return CoinIntel(
+      price: (json['price'] is num) ? (json['price'] as num).toDouble() : 0,
+      change24h: (json['change24h'] is num) ? (json['change24h'] as num).toDouble() : 0,
+      volume24h: (json['volume24h'] is num) ? (json['volume24h'] as num).toDouble() : 0,
+    );
+  }
 }

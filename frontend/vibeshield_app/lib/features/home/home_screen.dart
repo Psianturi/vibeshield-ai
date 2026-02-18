@@ -15,6 +15,7 @@ import '../../services/notification_service.dart';
 import '../dashboard/vibe_meter_widget.dart';
 import '../dashboard/sentiment_insights_widget.dart';
 import '../dashboard/multi_token_dashboard_widget.dart';
+import '../dashboard/market_intel_card.dart';
 import '../notifications/notification_panel.dart';
 import 'agent_profile_dialog.dart';
 import 'market_pulse_card.dart';
@@ -851,6 +852,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 // Emergency Swap hidden — autonomous injection flow handles swap execution automatically
                 // const SizedBox(height: 16),
                 // _buildEmergencySwapCard(context, walletState.address!),
+                const SizedBox(height: 16),
+                const MarketIntelCard(),
                 const SizedBox(height: 16),
                 _buildTxHistoryCard(context, walletState.address!),
               ],
