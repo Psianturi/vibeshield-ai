@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -26,6 +27,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const bool _showEmergencySwap = false;
+  static const String _agentAvatarAssetPath = 'assets/agent_avatar.png';
 
   final _tokenController = TextEditingController(text: 'BTC');
   final _tokenIdController = TextEditingController(text: 'bitcoin');
@@ -105,6 +107,193 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     await _openExternalUrl(url);
+  }
+
+  void _showAgentProfileDialog({
+    required String userAddress,
+    required bool step1Done,
+    required bool step2Done,
+    required bool simulationActive,
+    required String userWbnb,
+    required String backendWbnb,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final setupProgress = step2Done
+        ? 100
+        : step1Done
+            ? 65
+            : 30;
+
+    final statusText = step2Done
+        ? 'Identity unlocked and guard is active.'
+        : step1Done
+            ? 'Agent spawned. Approval required for auto-protection.'
+            : 'Agent is dormant. Complete setup to unlock protection.';
+
+    final profileName = step2Done
+        ? 'The Strategic Guardian'
+        : step1Done
+            ? 'The Waking Guardian'
+            : 'The Dormant Guardian';
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          backgroundColor: scheme.surfaceContainerHigh,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          step2Done ? 'IDENTITY UNLOCKED' : 'AGENT PREVIEW',
+                          style: textTheme.labelLarge?.copyWith(
+                            letterSpacing: 0.9,
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      width: 162,
+                      height: 162,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color:
+                                scheme.outlineVariant.withValues(alpha: 0.45)),
+                        color: scheme.surfaceContainerHighest
+                            .withValues(alpha: 0.22),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.asset(
+                          _agentAvatarAssetPath,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: scheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.35),
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.shield_outlined,
+                                size: 64,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    profileName,
+                    style: textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    statusText,
+                    style: textTheme.bodyMedium
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: setupProgress / 100,
+                    minHeight: 9,
+                    borderRadius: BorderRadius.circular(999),
+                    backgroundColor:
+                        scheme.surfaceContainerHighest.withValues(alpha: 0.30),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Setup progress: $setupProgress/100',
+                    style: textTheme.labelMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      Text('Wallet: ${_short(userAddress)}',
+                          style: textTheme.bodySmall),
+                      Text(step1Done ? 'Spawned: yes' : 'Spawned: no',
+                          style: textTheme.bodySmall),
+                      Text(step2Done ? 'Approved: yes' : 'Approved: no',
+                          style: textTheme.bodySmall),
+                      Text('WBNB: ${userWbnb.isEmpty ? '0' : userWbnb}',
+                          style: textTheme.bodySmall),
+                      Text('Faucet: ${backendWbnb.isEmpty ? '0' : backendWbnb}',
+                          style: textTheme.bodySmall),
+                      if (simulationActive)
+                        Text(
+                          'Simulation mode active',
+                          style: textTheme.bodySmall
+                              ?.copyWith(color: scheme.error),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await Clipboard.setData(
+                                ClipboardData(text: userAddress));
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Wallet address copied')),
+                            );
+                          },
+                          icon: const Icon(Icons.copy_outlined),
+                          label: const Text('Copy Wallet'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text('Nice!'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showWalletConnectQr(Uri uri) {
@@ -1010,70 +1199,103 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withValues(alpha: 0.20),
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (simulationActive) ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .errorContainer
-                                            .withValues(alpha: 0.35),
-                                        borderRadius:
-                                            BorderRadius.circular(999),
-                                      ),
-                                      child: Text(
-                                        '⚠️ SIMULATION MODE',
+                                onTap: () => _showAgentProfileDialog(
+                                  userAddress: userAddress,
+                                  step1Done: step1Done,
+                                  step2Done: step2Done,
+                                  simulationActive: simulationActive,
+                                  userWbnb: userWbnbBnb,
+                                  backendWbnb: backendWbnbBnb,
+                                ),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.20),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (simulationActive) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .errorContainer
+                                                .withValues(alpha: 0.35),
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            '⚠️ SIMULATION MODE',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                    fontWeight:
+                                                        FontWeight.w700),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                      ],
+                                      Text(
+                                        isReady
+                                            ? '🟢 Agent Active'
+                                            : '⚠️ Agent Setup Required',
                                         style: Theme.of(context)
                                             .textTheme
-                                            .labelSmall
+                                            .titleMedium
                                             ?.copyWith(
                                                 fontWeight: FontWeight.w700),
                                       ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                  ],
-                                  Text(
-                                    isReady
-                                        ? '🟢 Agent Active'
-                                        : '⚠️ Agent Setup Required',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        isReady
+                                            ? 'Guardian is monitoring your wallet 24/7. Use simulation injection to test black-swan response.'
+                                            : 'Complete setup in 2 steps: Activate agent and approve WBNB.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Tap this card to view agent identity.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                      if (simulationActive &&
+                                          injected != null) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Injected: ${injected.headline}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    isReady
-                                        ? 'Guardian is monitoring your wallet 24/7. Use simulation injection to test black-swan response.'
-                                        : 'Complete setup in 2 steps: Activate agent and approve WBNB.',
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                  if (simulationActive && injected != null) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'Injected: ${injected.headline}',
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                  ],
-                                ],
+                                ),
                               ),
                             ),
                             if (configError != null &&
