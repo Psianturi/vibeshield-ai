@@ -114,6 +114,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await _openExternalUrl(url);
   }
 
+  // Helper methods for avatar and strategy-specific names
+  String _getAgentName(int strategy, bool step2Done, bool step1Done) {
+    if (strategy == 2) {
+      // Loose strategy
+      return step2Done
+          ? 'Ranger of the Vibe'
+          : step1Done
+              ? 'Wandering Sentinel'
+              : 'The Awakening Ranger';
+    } else {
+      // Tight strategy
+      return step2Done
+          ? 'The Iron Guardian'
+          : step1Done
+              ? 'Keeper of the Vault'
+              : 'The Dormant Sentinel';
+    }
+  }
+
+  String _getFlavorText(int strategy, bool step2Done, bool step1Done) {
+    if (strategy == 2) {
+      // Loose strategy
+      return step2Done
+          ? 'An adventurous spirit patrolling the volatile forests of BSC. Reacts to medium-risk indicators with precision strikes.'
+          : step1Done
+              ? 'Stirring to life... will soon begin its watchful patrol.'
+              : 'Waiting to be awakened. Once active, will dance with market volatility.';
+    } else {
+      // Tight strategy
+      return step2Done
+          ? 'A vigilant protector monitoring the vault with iron discipline. Strikes only when danger is imminent and certain.'
+          : step1Done
+              ? 'Stirring to life... preparing for unwavering protection.'
+              : 'Locked away, waiting for activation. Will guard your assets with absolute conviction.';
+    }
+  }
+
+  String _getStrategyLabel(int strategy) {
+    return strategy == 2 ? 'Loose' : 'Tight';
+  }
+
+  Color _getBorderColorForStrategy(int strategy, ColorScheme scheme) {
+    return strategy == 2
+        ? const Color(0xFFD4AF37) // Gold for Loose
+        : const Color(0xFFC0C0C0); // Silver for Tight
+  }
+
   void _showAgentProfileDialog({
     required String userAddress,
     required int strategy,
@@ -126,26 +173,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final setupProgress = step2Done
-        ? 100
-        : step1Done
-            ? 65
-            : 30;
-
-    final statusText = step2Done
-        ? 'Identity unlocked and guard is active.'
-        : step1Done
-            ? 'Agent spawned. Approval required for auto-protection.'
-            : 'Agent is dormant. Complete setup to unlock protection.';
-
-    final strategyLabel = strategy == 2 ? 'Loose' : 'Tight';
-    final profileName = step2Done
-      ? 'The Strategic $strategyLabel Guardian'
-      : step1Done
-        ? 'The Waking $strategyLabel Guardian'
-        : 'The Dormant $strategyLabel Guardian';
-
+    final agentName = _getAgentName(strategy, step2Done, step1Done);
+    final flavorText = _getFlavorText(strategy, step2Done, step1Done);
+    final strategyLabel = _getStrategyLabel(strategy);
+    final borderColor = _getBorderColorForStrategy(strategy, scheme);
     final avatarPath = _agentAvatarPathForStrategy(strategy);
+
+    // Status indicators
+    final String statusIndicator =
+        step2Done ? '🟢 ONLINE' : '🟡 DORMANT';
+    final String protectionStatus =
+        step2Done ? '🛡️ PROTECTED' : '⏳ PENDING';
+    final String gasTank =
+        '⛽ ${userWbnb.isEmpty ? '0' : userWbnb} BNB';
 
     showDialog<void>(
       context: context,
@@ -156,27 +196,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           backgroundColor: scheme.surfaceContainerHigh,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
+            constraints: const BoxConstraints(maxWidth: 540),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // Close button
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Expanded(
-                        child: Text(
-                          step2Done ? 'IDENTITY UNLOCKED' : 'AGENT PREVIEW',
-                          style: textTheme.labelLarge?.copyWith(
-                            letterSpacing: 0.9,
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
                       IconButton(
                         tooltip: 'Close',
                         onPressed: () => Navigator.of(dialogContext).pop(),
@@ -185,90 +217,163 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Center(
-                    child: Container(
-                      width: 162,
-                      height: 162,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color:
-                                scheme.outlineVariant.withValues(alpha: 0.45)),
-                        color: scheme.surfaceContainerHighest
-                            .withValues(alpha: 0.22),
+
+                  // Circular avatar with border
+                  Container(
+                    width: 180,
+                    height: 180,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: borderColor,
+                        width: 3.5,
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Image.asset(
-                          avatarPath,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: scheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.35),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.shield_outlined,
-                                size: 64,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            );
-                          },
+                      boxShadow: [
+                        BoxShadow(
+                          color: borderColor.withValues(alpha: 0.25),
+                          blurRadius: 20,
+                          spreadRadius: 2,
                         ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        avatarPath,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: scheme.surfaceContainerHighest
+                                .withValues(alpha: 0.35),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.shield_outlined,
+                              size: 72,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20),
+
+                  // Agent name (unique based on strategy)
+                  Text(
+                    agentName,
+                    textAlign: TextAlign.center,
+                    style: textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Strategy label
+                  Text(
+                    'Strategy: $strategyLabel',
+                    textAlign: TextAlign.center,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                   const SizedBox(height: 14),
+
+                  // Flavor text / Lore
                   Text(
-                    profileName,
-                    style: textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    flavorText,
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      height: 1.5,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    statusText,
-                    style: textTheme.bodyMedium
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  const SizedBox(height: 18),
+
+                  // Divider
+                  Divider(
+                    color: scheme.outlineVariant.withValues(alpha: 0.3),
+                    height: 1,
                   ),
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(
-                    value: setupProgress / 100,
-                    minHeight: 9,
-                    borderRadius: BorderRadius.circular(999),
-                    backgroundColor:
-                        scheme.surfaceContainerHighest.withValues(alpha: 0.30),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Setup progress: $setupProgress/100',
-                    style: textTheme.labelMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 8,
+                  const SizedBox(height: 18),
+
+                  // RPG-style stats grid
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      Text('Wallet: ${_short(userAddress)}',
-                          style: textTheme.bodySmall),
-                      Text(step1Done ? 'Spawned: yes' : 'Spawned: no',
-                          style: textTheme.bodySmall),
-                      Text(step2Done ? 'Approved: yes' : 'Approved: no',
-                          style: textTheme.bodySmall),
-                      Text('WBNB: ${userWbnb.isEmpty ? '0' : userWbnb}',
-                          style: textTheme.bodySmall),
-                      Text('Faucet: ${backendWbnb.isEmpty ? '0' : backendWbnb}',
-                          style: textTheme.bodySmall),
-                      if (simulationActive)
-                        Text(
-                          'Simulation mode active',
-                          style: textTheme.bodySmall
-                              ?.copyWith(color: scheme.error),
-                        ),
+                      _buildStatItem(
+                        icon: Icons.circle,
+                        iconColor: step2Done ? Colors.green : Colors.amber,
+                        label: statusIndicator,
+                        textTheme: textTheme,
+                        scheme: scheme,
+                      ),
+                      _buildStatItem(
+                        icon: Icons.shield,
+                        iconColor: step2Done ? scheme.primary : Colors.grey,
+                        label: protectionStatus,
+                        textTheme: textTheme,
+                        scheme: scheme,
+                      ),
+                      _buildStatItem(
+                        icon: Icons.local_gas_station,
+                        iconColor: scheme.primary,
+                        label: gasTank,
+                        textTheme: textTheme,
+                        scheme: scheme,
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 18),
+
+                  // Divider
+                  Divider(
+                    color: scheme.outlineVariant.withValues(alpha: 0.3),
+                    height: 1,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Wallet info (only show relevant details when active)
+                  if (step2Done)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        'Wallet: ${_short(userAddress)}',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Wallet: ${_short(userAddress)}',
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Complete 2 steps to activate protection',
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: scheme.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+
+                  // Action buttons
                   Row(
                     children: [
                       Expanded(
@@ -279,19 +384,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                  content: Text('Wallet address copied')),
+                                content: Text('Wallet address copied'),
+                                duration: Duration(seconds: 2),
+                              ),
                             );
                           },
-                          icon: const Icon(Icons.copy_outlined),
-                          label: const Text('Copy Wallet'),
+                          icon: const Icon(Icons.copy_outlined, size: 18),
+                          label: const Text('Copy Address'),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: () => Navigator.of(dialogContext).pop(),
-                          icon: const Icon(Icons.check_circle_outline),
-                          label: const Text('Nice!'),
+                          icon: const Icon(Icons.check_circle_outline, size: 18),
+                          label: const Text('Close'),
                         ),
                       ),
                     ],
@@ -302,6 +409,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildStatItem({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required TextTheme textTheme,
+    required ColorScheme scheme,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          color: iconColor,
+          size: 20,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1235,41 +1370,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      if (simulationActive) ...[
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 6,
+                                      // Top row: title and chevron indicator
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                if (simulationActive) ...[
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 6,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .errorContainer
+                                                          .withValues(alpha: 0.35),
+                                                      borderRadius:
+                                                          BorderRadius.circular(999),
+                                                    ),
+                                                    child: Text(
+                                                      '⚠️ SIMULATION MODE',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight.w700),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                ],
+                                                Text(
+                                                  isReady
+                                                      ? '🟢 Agent Active'
+                                                      : '⚠️ Agent Setup Required',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                          fontWeight: FontWeight.w700),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .errorContainer
-                                                .withValues(alpha: 0.35),
-                                            borderRadius:
-                                                BorderRadius.circular(999),
+                                          // Chevron indicator on the right
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Icon(
+                                              Icons.chevron_right,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                              size: 24,
+                                            ),
                                           ),
-                                          child: Text(
-                                            '⚠️ SIMULATION MODE',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                    fontWeight:
-                                                        FontWeight.w700),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                      ],
-                                      Text(
-                                        isReady
-                                            ? '🟢 Agent Active'
-                                            : '⚠️ Agent Setup Required',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w700),
+                                        ],
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
@@ -1282,7 +1442,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        'Tap this card to view agent identity.',
+                                        'Click to view agent identity.',
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
@@ -1290,7 +1450,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               color: Theme.of(context)
                                                   .colorScheme
                                                   .onSurfaceVariant,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.w500,
                                             ),
                                       ),
                                       if (simulationActive &&
@@ -1306,23 +1466,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ],
                                   ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: () => _showAgentProfileDialog(
-                                  userAddress: userAddress,
-                                  strategy: (status?.strategy ?? _selectedStrategy) == 2 ? 2 : 1,
-                                  step1Done: step1Done,
-                                  step2Done: step2Done,
-                                  simulationActive: simulationActive,
-                                  userWbnb: userWbnbBnb,
-                                  backendWbnb: backendWbnbBnb,
-                                ),
-                                icon: const Icon(Icons.badge_outlined),
-                                label: const Text('View Agent Card'),
                               ),
                             ),
                             if (configError != null &&
