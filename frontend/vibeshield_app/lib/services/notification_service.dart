@@ -51,6 +51,9 @@ class NotificationService extends ChangeNotifier {
   bool _browserPermissionGranted = false;
   bool get browserPermissionGranted => _browserPermissionGranted;
 
+  bool _browserNotificationsSupported = false;
+  bool get browserNotificationsSupported => _browserNotificationsSupported;
+
   /// All notifications, newest first.
   List<AppNotification> get items => List.unmodifiable(_items);
 
@@ -122,7 +125,10 @@ class NotificationService extends ChangeNotifier {
   void checkBrowserPermission() {
     if (!kIsWeb) return;
     try {
-      _browserPermissionGranted = _checkPermission();
+      _browserNotificationsSupported = _checkSupported();
+      if (_browserNotificationsSupported) {
+        _browserPermissionGranted = _checkPermission();
+      }
       notifyListeners();
     } catch (_) {}
   }
@@ -134,6 +140,7 @@ class NotificationService extends ChangeNotifier {
 
   static Future<bool> Function() _requestPermission = () async => false;
   static bool Function() _checkPermission = () => false;
+  static bool Function() _checkSupported = () => false;
   static void Function(String title, String body) _fireBrowserNotification =
       (_, __) {};
 
@@ -141,10 +148,12 @@ class NotificationService extends ChangeNotifier {
   static void configureBrowserApi({
     required Future<bool> Function() requestPermission,
     required bool Function() checkPermission,
+    required bool Function() checkSupported,
     required void Function(String title, String body) fireNotification,
   }) {
     _requestPermission = requestPermission;
     _checkPermission = checkPermission;
+    _checkSupported = checkSupported;
     _fireBrowserNotification = fireNotification;
   }
 }

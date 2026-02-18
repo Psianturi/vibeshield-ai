@@ -113,9 +113,9 @@ class _NotificationCenterSheet extends StatelessWidget {
                         ),
                       ],
                       // Browser notification toggle
-                      if (!svc.browserPermissionGranted)
+                      if (svc.browserNotificationsSupported && !svc.browserPermissionGranted)
                         IconButton(
-                          tooltip: 'Enable browser notifications',
+                          tooltip: 'Enable browser push notifications',
                           onPressed: () async {
                             final ok = await svc.requestBrowserPermission();
                             if (context.mounted) {
@@ -123,7 +123,7 @@ class _NotificationCenterSheet extends StatelessWidget {
                                 SnackBar(
                                   content: Text(
                                     ok
-                                        ? 'Browser notifications enabled!'
+                                        ? 'Browser push notifications enabled!'
                                         : 'Permission denied. Check browser settings.',
                                   ),
                                 ),
@@ -131,7 +131,9 @@ class _NotificationCenterSheet extends StatelessWidget {
                             }
                           },
                           icon: Icon(Icons.notifications_off, color: scheme.error, size: 20),
-                        ),
+                        )
+                      else if (svc.browserPermissionGranted)
+                        Icon(Icons.notifications_active, color: Colors.green.shade400, size: 20),
                     ],
                   ),
                 ),
@@ -140,7 +142,11 @@ class _NotificationCenterSheet extends StatelessWidget {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Agent activity & threat alerts. Enable browser push for background alerts.',
+                      svc.browserNotificationsSupported
+                          ? (svc.browserPermissionGranted
+                              ? 'Push notifications active. Alerts will appear even in background.'
+                              : 'Tap the bell icon above to enable browser push alerts.')
+                          : 'In-app alerts active. Browser push not supported on this device \u2014 use Chrome Desktop for push.',
                       style: TextStyle(color: Colors.grey[500], fontSize: 12),
                     ),
                   ),

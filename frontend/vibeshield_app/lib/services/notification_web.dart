@@ -13,6 +13,7 @@ void configureBrowserNotifications() {
   NotificationService.configureBrowserApi(
     requestPermission: _requestPermission,
     checkPermission: _checkPermission,
+    checkSupported: _checkSupported,
     fireNotification: _fireNotification,
   );
 
@@ -37,10 +38,19 @@ bool _checkPermission() {
   }
 }
 
+bool _checkSupported() {
+  try {
+    return html.Notification.supported;
+  } catch (_) {
+    return false;
+  }
+}
+
 void _fireNotification(String title, String body) {
   try {
+    if (!html.Notification.supported) return;
     html.Notification(title, body: body, icon: 'icons/Icon-192.png');
   } catch (_) {
- 
+    // Silently fail on unsupported browsers.
   }
 }

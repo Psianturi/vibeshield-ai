@@ -848,11 +848,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   (walletState.address?.isNotEmpty ?? false)) ...[
                 const SizedBox(height: 24),
                 _buildAgentDemoCard(context, walletState.address!),
-                const SizedBox(height: 16),
-                _buildEmergencySwapCard(context, walletState.address!),
+                // Emergency Swap hidden — autonomous injection flow handles swap execution automatically
+                // const SizedBox(height: 16),
+                // _buildEmergencySwapCard(context, walletState.address!),
                 const SizedBox(height: 16),
                 _buildTxHistoryCard(context, walletState.address!),
-              ]
+              ],
+              const SizedBox(height: 32),
+              // Footer
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Column(
+                  children: [
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shield, size: 16, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'VibeShield AI',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                        Text(
+                          '  \u00b7  Psianturi',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: Colors.grey[500],
+                              ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Autonomous DeFi Guardian on BSC',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
