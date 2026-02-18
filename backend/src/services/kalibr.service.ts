@@ -118,6 +118,12 @@ export class KalibrService {
   ): Promise<{ text: string; usedModel: string; requestedModel: string; apiVersion: 'v1beta' | 'v1'; fallbackFrom?: string }> {
     if (!this.googleApiKey) throw new Error('Missing GOOGLE_API_KEY (or GEMINI_API_KEY)');
 
+    // Refuse to call Gemini while in 429 backoff cooldown
+    if (this.isBackedOff()) {
+      const secs = Math.ceil((this._backoffUntil - Date.now()) / 1000);
+      throw Object.assign(new Error(`Gemini 429 backoff active (${secs}s remaining)`), { response: { status: 429 } });
+    }
+
     const resolved = await this.resolveGeminiModel(modelId);
     const resolvedModel = resolved.model;
 
@@ -143,6 +149,7 @@ export class KalibrService {
 
     try {
       const text = await tryCall('v1beta');
+      this.clearBackoff();          // success → reset backoff
       return {
         text,
         usedModel: resolvedModel,
@@ -151,10 +158,17 @@ export class KalibrService {
         fallbackFrom: resolved.fallbackFrom
       };
     } catch (e: any) {
+      // 429 → exponential backoff
+      if (e?.response?.status === 429) {
+        this.recordBackoff();
+        throw e;
+      }
+
       const msg = this.formatAxiosError(e);
       // Some accounts/models respond only under v1; retry once.
       if (String(msg).includes('not found') || e?.response?.status === 404) {
         const text = await tryCall('v1');
+        this.clearBackoff();
         return {
           text,
           usedModel: resolvedModel,
@@ -313,9 +327,41 @@ Should we exit position? Respond with JSON: {riskScore: 0-100, shouldExit: boole
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Rate-limit awareness: track 429 backoff
+  // ---------------------------------------------------------------------------
+  private _backoffUntil = 0;
+  private _backoffMs = 0;
+  private static readonly BACKOFF_INITIAL_MS = 15_000;  // 15s
+  private static readonly BACKOFF_MAX_MS = 300_000;     // 5 min
+
+  private isBackedOff(): boolean {
+    return Date.now() < this._backoffUntil;
+  }
+
+  private recordBackoff(): void {
+    this._backoffMs = this._backoffMs > 0
+      ? Math.min(this._backoffMs * 2, KalibrService.BACKOFF_MAX_MS)
+      : KalibrService.BACKOFF_INITIAL_MS;
+    this._backoffUntil = Date.now() + this._backoffMs;
+    console.warn(`[Kalibr] 429 backoff: pausing Gemini calls for ${this._backoffMs / 1000}s`);
+  }
+
+  private clearBackoff(): void {
+    this._backoffMs = 0;
+    this._backoffUntil = 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Market brief cache (avoid calling Gemini on every page load)
+  // ---------------------------------------------------------------------------
+  private _briefCache: { text: string; expiresAt: number } | null = null;
+  private static readonly BRIEF_CACHE_TTL_MS = Number(process.env.MARKET_BRIEF_CACHE_TTL_MS ?? 300_000); // 5 min
+
   /**
    * Generate a concise 1-sentence market brief for the Agent Intel Feed.
    * Uses Gemini via Kalibr routing with a lightweight prompt.
+   * Results are cached for 5 minutes to avoid rate limits.
    */
   async generateMarketBrief(marketData: {
     btc?: { price: number; change24h: number } | null;
@@ -324,6 +370,17 @@ Should we exit position? Respond with JSON: {riskScore: 0-100, shouldExit: boole
     sentimentScore: number;
     sentimentLabel: string;
   }): Promise<string> {
+    // Return cached brief if still fresh.
+    if (this._briefCache && Date.now() < this._briefCache.expiresAt) {
+      return this._briefCache.text;
+    }
+
+    // Skip if in 429 backoff period.
+    if (this.isBackedOff()) {
+      const score = marketData.sentimentScore;
+      return this.fallbackBrief(score);
+    }
+
     const btcChange = marketData.btc?.change24h?.toFixed(2) ?? 'N/A';
     const ethChange = marketData.eth?.change24h?.toFixed(2) ?? 'N/A';
     const bnbChange = marketData.bnb?.change24h?.toFixed(2) ?? 'N/A';
@@ -345,16 +402,26 @@ Do NOT use markdown or quotes. Just the sentence.`;
       const decision = await this.decideModel();
       const modelId = decision?.modelId ?? this.modelLow;
       const gemini = await this.callGemini(modelId, prompt);
+      this.clearBackoff();
 
       const text = gemini.text.split('\n')[0].replace(/^["']|["']$/g, '').trim();
-      return text || 'Markets in flux. Stay vigilant, Guardian.';
+      const result = text || 'Markets in flux. Stay vigilant, Guardian.';
+
+      // Cache the result.
+      this._briefCache = { text: result, expiresAt: Date.now() + KalibrService.BRIEF_CACHE_TTL_MS };
+      return result;
     } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 429) this.recordBackoff();
+
       console.warn('[Kalibr] generateMarketBrief failed:', e.message);
-      // Intelligent fallback based on data
-      const score = marketData.sentimentScore;
-      if (score >= 65) return 'Bullish momentum detected. Shields on standby.';
-      if (score <= 35) return 'Bearish signals rising. Guardian shields activated.';
-      return 'Markets in flux. Stay vigilant, Guardian.';
+      return this.fallbackBrief(marketData.sentimentScore);
     }
+  }
+
+  private fallbackBrief(score: number): string {
+    if (score >= 65) return 'Bullish momentum detected. Shields on standby.';
+    if (score <= 35) return 'Bearish signals rising. Guardian shields activated.';
+    return 'Markets in flux. Stay vigilant, Guardian.';
   }
 }

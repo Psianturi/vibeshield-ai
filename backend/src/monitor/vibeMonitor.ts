@@ -13,6 +13,10 @@ let _agentDemo: AgentDemoService | null = null;
 
 let _cycleInFlight = false;
 
+// Cache for risk analysis results to reduce Gemini calls.
+const _riskCache = new Map<string, { result: any; expiresAt: number }>();
+const RISK_CACHE_TTL_MS = Number(process.env.MONITOR_RISK_CACHE_TTL_MS ?? 180_000); // 3 min default
+
 function getCryptoracle(): CryptoracleService {
   if (!_cryptoracle) _cryptoracle = new CryptoracleService();
   return _cryptoracle;
@@ -84,6 +88,28 @@ export async function runMonitorOnce() {
           demoContextManager.getActiveContext(symbol) ||
           (alias !== symbol ? demoContextManager.getActiveContext(alias) : null);
 
+        // OPTIMIZATION: If no injected context AND sentiment is fallback (no real data),
+        // skip the expensive Gemini call — it would just analyze fake numbers.
+        const isFallback = Array.isArray(sentiment.sources) && sentiment.sources.includes('fallback');
+        if (!injectedContext && isFallback) {
+          console.log(
+            `[MONITOR] skipping Gemini — no injected context & sentiment is fallback for ${symbol}`,
+          );
+          results.push({ sub, sentiment, price, analysis: { riskScore: sentiment.score / 2, shouldExit: false, reason: 'Skipped: fallback data', aiModel: 'cache' }, executed: null });
+          continue;
+        }
+
+        const cacheKey = `${sub.userAddress}:${symbol}`;
+        if (!injectedContext) {
+          const cached = _riskCache.get(cacheKey);
+          if (cached && Date.now() < cached.expiresAt) {
+            console.log(`[MONITOR] using cached risk for ${symbol} (expires in ${Math.round((cached.expiresAt - Date.now()) / 1000)}s)`);
+            const analysis = cached.result;
+            results.push({ sub, sentiment, price, analysis, executed: null });
+            continue;
+          }
+        }
+
         const analysis = await getKalibr().analyzeRisk(sentiment, price, {
           injectedContext: injectedContext
             ? {
@@ -92,6 +118,10 @@ export async function runMonitorOnce() {
               }
             : undefined,
         });
+
+        if (!injectedContext) {
+          _riskCache.set(cacheKey, { result: analysis, expiresAt: Date.now() + RISK_CACHE_TTL_MS });
+        }
 
         let executed: any = null;
         if (analysis.shouldExit && analysis.riskScore >= sub.riskThreshold) {
