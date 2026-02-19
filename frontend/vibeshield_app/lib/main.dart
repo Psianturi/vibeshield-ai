@@ -24,6 +24,25 @@ class MyApp extends StatelessWidget {
         ),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         useMaterial3: true,
+        // Glassmorphism-inspired card styling
+        cardTheme: CardTheme(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1,
+            ),
+          ),
+          color: Colors.white.withValues(alpha: 0.05),
+        ),
+        
+        appBarTheme: AppBarTheme(
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+        ),
       ),
       home: const MainNavigation(),
     );

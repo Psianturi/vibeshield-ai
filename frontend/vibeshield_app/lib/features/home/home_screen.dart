@@ -72,7 +72,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _wcUriSub = walletService.wcUriStream.listen(_showWalletConnectQr);
     }
 
-    // Start heartbeat animation cycle.
     _startHeartbeat();
   }
 
@@ -111,7 +110,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       browserPush: false,
     );
 
-    // Fake "analyzing" toast after 8 seconds.
     Future.delayed(const Duration(seconds: 8), () {
       if (!mounted || _postInjectPollTimer == null) return;
       if (mounted) {
@@ -137,7 +135,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _postInjectPollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       _postInjectPollCount++;
 
-      // Safety: stop after 90 seconds (18 ticks).
       if (_postInjectPollCount > 18) {
         _stopPostInjectionPolling();
         return;
@@ -165,7 +162,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             browserPush: true,
           );
 
-          // Show prominent toast.
           if (mounted) {
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
@@ -200,7 +196,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         _lastKnownTxCount = history.length;
       } catch (_) {
-        // Silently continue polling.
       }
     });
   }
@@ -747,14 +742,150 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
-                children: [
-                  MarketPulseCard(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth > 900;
+            if (isDesktop) {
+              return _buildDesktopLayout(context, vibeState, walletState);
+            } else {
+              return _buildMobileLayout(context, vibeState, walletState);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // DESKTOP LAYOUT (Split View: Left Action + Right Data)
+  // ===========================================================================
+  Widget _buildDesktopLayout(
+    BuildContext context,
+    VibeState vibeState,
+    WalletState walletState,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1600),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- LEFT COLUMN (ACTION CENTER) ---
+              Expanded(
+                flex: 4,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Agent Demo Card (Primary Action)
+                      if (walletState.isConnected &&
+                          (walletState.address?.isNotEmpty ?? false)) ...[
+                        _buildAgentDemoCard(context, walletState.address!),
+                        const SizedBox(height: 24),
+                      ],
+                      // Pre-connect landing if not connected
+                      if (!walletState.isConnected) ...[
+                        _buildPreConnectLandingCard(context),
+                        const SizedBox(height: 24),
+                      ],
+                      // Token Search Card
+                      _buildTokenSearchCard(context, vibeState, walletState),
+                      const SizedBox(height: 24),
+                      // Vibe Check Result (show below search on desktop)
+                      if (vibeState.error != null)
+                        Card(
+                          color: Colors.red.shade900,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(vibeState.error!),
+                          ),
+                        ),
+                      if (vibeState.isLoading) ...[
+                        const ScanningVibeMeterWidget(),
+                      ] else if (vibeState.result != null) ...[
+                        VibeMeterWidget(result: vibeState.result!),
+                        const SizedBox(height: 16),
+                        _buildAnalysisCard(vibeState.result!),
+                        const SizedBox(height: 16),
+                        _buildSentimentInsightsCard(),
+                      ],
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                ),
+              ),
+
+              // --- DIVIDER ---
+              Container(
+                width: 1,
+                height: MediaQuery.of(context).size.height - 100,
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      scheme.outline.withValues(alpha: 0.3),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+
+              // --- RIGHT COLUMN (DATA HUB) ---
+              Expanded(
+                flex: 6,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Market Pulse Ticker
+                      MarketPulseCard(),
+                      const SizedBox(height: 24),
+                      // Multi-Token Sentiment Dashboard (Grid)
+                      _buildMultiTokenDashboardCard(),
+                      const SizedBox(height: 24),
+                      // Market Intel
+                      if (walletState.isConnected) ...[
+                        const MarketIntelCard(),
+                        const SizedBox(height: 24),
+                        // Transaction History
+                        _buildTxHistoryCard(context, walletState.address!),
+                        const SizedBox(height: 24),
+                      ],
+                      // Footer
+                      _buildFooter(context),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // MOBILE LAYOUT (Vertical Stack - Original Layout)
+  // ===========================================================================
+  Widget _buildMobileLayout(
+    BuildContext context,
+    VibeState vibeState,
+    WalletState walletState,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            children: [
+              MarketPulseCard(),
               const SizedBox(height: 16),
               _buildMultiTokenDashboardCard(),
               const SizedBox(height: 16),
@@ -762,71 +893,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 _buildPreConnectLandingCard(context),
                 const SizedBox(height: 16),
               ],
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      if (walletState.error != null) ...[
-                        Text(
-                          walletState.error!,
-                          style: TextStyle(color: Colors.red.shade300),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (walletState.isConnected) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Wallet: ${_short(walletState.address ?? '')}',
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Selected: ${_tokenController.text.trim().toUpperCase()}  (${_tokenIdController.text.trim().toLowerCase()})',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _openTokenSearchModal,
-                            child: const Text('Search token'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: vibeState.isLoading
-                            ? null
-                            : () {
-                                final token =
-                                    _tokenController.text.trim().toUpperCase();
-                                final tokenId = _tokenIdController.text
-                                    .trim()
-                                    .toLowerCase();
-
-                                // Fetch both vibe check and insights
-                                ref
-                                    .read(vibeNotifierProvider.notifier)
-                                    .checkVibe(token, tokenId);
-                                ref
-                                    .read(insights.insightsProvider.notifier)
-                                    .fetchInsights(token);
-                              },
-                        child: vibeState.isLoading
-                            ? const _ScanningButtonLabel()
-                            : const Text('Check Vibe'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildTokenSearchCard(context, vibeState, walletState),
               const SizedBox(height: 24),
               if (vibeState.error != null)
                 Card(
@@ -849,57 +916,133 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   (walletState.address?.isNotEmpty ?? false)) ...[
                 const SizedBox(height: 24),
                 _buildAgentDemoCard(context, walletState.address!),
-                // Emergency Swap hidden — autonomous injection flow handles swap execution automatically
-                // const SizedBox(height: 16),
-                // _buildEmergencySwapCard(context, walletState.address!),
                 const SizedBox(height: 16),
                 const MarketIntelCard(),
                 const SizedBox(height: 16),
                 _buildTxHistoryCard(context, walletState.address!),
               ],
               const SizedBox(height: 32),
-              // Footer
-              Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  children: [
-                    const Divider(),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.shield, size: 16, color: Theme.of(context).colorScheme.primary),
-                        const SizedBox(width: 6),
-                        Text(
-                          'VibeShield AI',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                        ),
-                        Text(
-                          '  \u00b7  Psianturi',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                color: Colors.grey[500],
-                              ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Autonomous DeFi Guardian on BSC',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildFooter(context),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Token Search Card (Extracted for reuse)
+  // ===========================================================================
+  Widget _buildTokenSearchCard(
+    BuildContext context,
+    VibeState vibeState,
+    WalletState walletState,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (walletState.error != null) ...[
+              Text(
+                walletState.error!,
+                style: TextStyle(color: Colors.red.shade300),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (walletState.isConnected) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Wallet: ${_short(walletState.address ?? '')}',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Selected: ${_tokenController.text.trim().toUpperCase()}  (${_tokenIdController.text.trim().toLowerCase()})',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _openTokenSearchModal,
+                  child: const Text('Search token'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: vibeState.isLoading
+                  ? null
+                  : () {
+                      final token = _tokenController.text.trim().toUpperCase();
+                      final tokenId =
+                          _tokenIdController.text.trim().toLowerCase();
+                      ref
+                          .read(vibeNotifierProvider.notifier)
+                          .checkVibe(token, tokenId);
+                      ref
+                          .read(insights.insightsProvider.notifier)
+                          .fetchInsights(token);
+                    },
+              child: vibeState.isLoading
+                  ? const _ScanningButtonLabel()
+                  : const Text('Check Vibe'),
+            ),
+          ],
         ),
-        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Footer Widget (Extracted for reuse)
+  // ===========================================================================
+  Widget _buildFooter(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          const Divider(),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.shield,
+                size: 16,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'VibeShield AI',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+              ),
+              Text(
+                '  \u00b7  Psianturi',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Colors.grey[500],
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Autonomous DeFi Guardian on BSC',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+        ],
       ),
     );
   }

@@ -142,7 +142,17 @@ class MultiTokenDashboardWidget extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = constraints.maxWidth > 600 ? 4 : 2;
+        // Responsive columns: 2 for mobile, 3 for tablet, 4 for desktop, 5 for wide
+        int cols;
+        if (constraints.maxWidth > 900) {
+          cols = 5;
+        } else if (constraints.maxWidth > 700) {
+          cols = 4;
+        } else if (constraints.maxWidth > 500) {
+          cols = 3;
+        } else {
+          cols = 2;
+        }
 
         return Wrap(
           spacing: 12,
