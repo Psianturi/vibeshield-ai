@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../common/shimmer_loading.dart';
 
 class MultiTokenDashboardWidget extends StatelessWidget {
   final Map<String, dynamic> tokens;
@@ -7,6 +8,7 @@ class MultiTokenDashboardWidget extends StatelessWidget {
   final String? source;
   final int? updatedAt;
   final Map<String, dynamic>? stats;
+  final bool isLoading;
 
   const MultiTokenDashboardWidget({
     super.key,
@@ -15,6 +17,7 @@ class MultiTokenDashboardWidget extends StatelessWidget {
     this.source,
     this.updatedAt,
     this.stats,
+    this.isLoading = false,
   });
 
   @override
@@ -118,7 +121,9 @@ class MultiTokenDashboardWidget extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
-            if (tokens.isEmpty)
+            if (isLoading)
+              _buildSkeletonGrid(context)
+            else if (tokens.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -163,6 +168,35 @@ class MultiTokenDashboardWidget extends StatelessWidget {
               child: _buildTokenCard(context, entry.key, entry.value),
             );
           }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildSkeletonGrid(BuildContext context) {
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int cols;
+        if (constraints.maxWidth > 900) {
+          cols = 5;
+        } else if (constraints.maxWidth > 700) {
+          cols = 4;
+        } else if (constraints.maxWidth > 500) {
+          cols = 3;
+        } else {
+          cols = 2;
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: List.generate(7, (index) {
+            return SizedBox(
+              width: (constraints.maxWidth - (12 * (cols - 1))) / cols,
+              child: const SkeletonTokenCard(),
+            );
+          }),
         );
       },
     );

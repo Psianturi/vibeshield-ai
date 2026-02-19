@@ -771,99 +771,119 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         constraints: const BoxConstraints(maxWidth: 1600),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // --- LEFT COLUMN (ACTION CENTER) ---
-              Expanded(
-                flex: 4,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      // Agent Demo Card (Primary Action)
-                      if (walletState.isConnected &&
-                          (walletState.address?.isNotEmpty ?? false)) ...[
-                        _buildAgentDemoCard(context, walletState.address!),
-                        const SizedBox(height: 24),
-                      ],
-                      // Pre-connect landing if not connected
-                      if (!walletState.isConnected) ...[
-                        _buildPreConnectLandingCard(context),
-                        const SizedBox(height: 24),
-                      ],
-                      // Token Search Card
-                      _buildTokenSearchCard(context, vibeState, walletState),
-                      const SizedBox(height: 24),
-                      // Vibe Check Result (show below search on desktop)
-                      if (vibeState.error != null)
-                        Card(
-                          color: Colors.red.shade900,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(vibeState.error!),
+          child: LayoutBuilder(
+            builder: (context, outerConstraints) {
+              final availableHeight = outerConstraints.maxHeight;
+              
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- LEFT COLUMN (ACTION CENTER - Sticky) ---
+                  Expanded(
+                    flex: 4,
+                    child: SizedBox(
+                      height: availableHeight,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Agent Demo Card (Primary Action) - Always visible at top
+                          if (walletState.isConnected &&
+                              (walletState.address?.isNotEmpty ?? false)) ...[
+                            _buildAgentDemoCard(context, walletState.address!),
+                            const SizedBox(height: 24),
+                          ],
+                          // Pre-connect landing if not connected
+                          if (!walletState.isConnected) ...[
+                            _buildPreConnectLandingCard(context),
+                            const SizedBox(height: 24),
+                          ],
+            
+                          _buildTokenSearchCard(context, vibeState, walletState),
+                          const SizedBox(height: 24),
+
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: [
+                                  if (vibeState.error != null)
+                                    Card(
+                                      color: Colors.red.shade900,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Text(vibeState.error!),
+                                      ),
+                                    ),
+                                  if (vibeState.isLoading) ...[
+                                    const ScanningVibeMeterWidget(),
+                                  ] else if (vibeState.result != null) ...[
+                                    VibeMeterWidget(result: vibeState.result!),
+                                    const SizedBox(height: 16),
+                                    _buildAnalysisCard(vibeState.result!),
+                                    const SizedBox(height: 16),
+                                    _buildSentimentInsightsCard(),
+                                  ],
+                                  const SizedBox(height: 40),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      if (vibeState.isLoading) ...[
-                        const ScanningVibeMeterWidget(),
-                      ] else if (vibeState.result != null) ...[
-                        VibeMeterWidget(result: vibeState.result!),
-                        const SizedBox(height: 16),
-                        _buildAnalysisCard(vibeState.result!),
-                        const SizedBox(height: 16),
-                        _buildSentimentInsightsCard(),
-                      ],
-                      const SizedBox(height: 80),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
 
               // --- DIVIDER ---
-              Container(
-                width: 1,
-                height: MediaQuery.of(context).size.height - 100,
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      scheme.outline.withValues(alpha: 0.3),
-                      Colors.transparent,
-                    ],
+                  Container(
+                    width: 1,
+                    height: availableHeight,
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          scheme.outline.withValues(alpha: 0.3),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
 
-              // --- RIGHT COLUMN (DATA HUB) ---
-              Expanded(
-                flex: 6,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      // Market Pulse Ticker
-                      MarketPulseCard(),
-                      const SizedBox(height: 24),
-                      // Multi-Token Sentiment Dashboard (Grid)
-                      _buildMultiTokenDashboardCard(),
-                      const SizedBox(height: 24),
-                      // Market Intel
-                      if (walletState.isConnected) ...[
-                        const MarketIntelCard(),
-                        const SizedBox(height: 24),
-                        // Transaction History
-                        _buildTxHistoryCard(context, walletState.address!),
-                        const SizedBox(height: 24),
-                      ],
-                      // Footer
-                      _buildFooter(context),
-                      const SizedBox(height: 40),
-                    ],
+                  // --- RIGHT COLUMN (DATA HUB) ---
+                  Expanded(
+                    flex: 6,
+                    child: SizedBox(
+                      height: availableHeight,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            // Market Pulse Ticker
+                            MarketPulseCard(),
+                            const SizedBox(height: 32),
+                            // Multi-Token Sentiment Dashboard (Grid)
+                            _buildMultiTokenDashboardCard(),
+                            const SizedBox(height: 32),
+                            // Market Intel
+                            if (walletState.isConnected) ...[
+                              const MarketIntelCard(),
+                              const SizedBox(height: 32),
+                              // Transaction History
+                              _buildTxHistoryCard(context, walletState.address!),
+                              const SizedBox(height: 32),
+                            ],
+                            // Footer
+                            _buildFooter(context),
+                            const SizedBox(height: 48),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -2604,6 +2624,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       source: multiTokenState.source,
       updatedAt: multiTokenState.updatedAt,
       stats: multiTokenState.stats,
+      isLoading: multiTokenState.isLoading,
       onTokenSelected: (token, coinGeckoId) {
         _applyPreset(symbol: token, coinGeckoId: coinGeckoId);
         ref.read(vibeNotifierProvider.notifier).checkVibe(
