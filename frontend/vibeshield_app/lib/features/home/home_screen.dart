@@ -1518,7 +1518,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 Text(
                                                   isReady
                                                       ? 'Agent Active'
-                                                      : 'âš ï¸ Agent Setup Required',
+                                                      : 'Agent Setup Required',
                                                   style: Theme.of(context)
                                                       .textTheme
                                                       .titleMedium
@@ -1732,7 +1732,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             const SizedBox(height: 12),
                             if (!step1Done) ...[
                               const Text(
-                                  'Step 1 â€” Choose strategy and activate agent'),
+                                  'Step 1 Choose strategy and activate agent'),
                               const SizedBox(height: 8),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1745,7 +1745,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       DropdownMenuItem(
                                           value: 1, child: Text('Tight')),
                                       DropdownMenuItem(
-                                          value: 2, child: Text('ðŸ’Ž Loose')),
+                                          value: 2, child: Text('Loose')),
                                     ],
                                     onChanged: _agentBusy
                                         ? null

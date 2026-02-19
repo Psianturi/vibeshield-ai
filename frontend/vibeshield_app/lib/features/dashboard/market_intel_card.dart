@@ -168,7 +168,7 @@ class MarketIntelCard extends ConsumerWidget {
               Icon(Icons.verified, size: 10, color: Colors.grey[600]),
               const SizedBox(width: 4),
               Text(
-                'CoinGecko Pro · Cryptoracle · Kalibr AI',
+                'CoinGecko · Cryptoracle · Kalibr AI',
                 style: TextStyle(fontSize: 9, color: Colors.grey[600]),
               ),
             ],

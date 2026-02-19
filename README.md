@@ -80,13 +80,14 @@ vibeshield-ai/
 │       └── lib/
 │           ├── core/           # Config, agent demo models
 │           ├── features/
-│           │   ├── home/       # HomeScreen, AgentProfileDialog, MarketPulseCard
+│           │   ├── home/       # HomeScreen (desktop/mobile layouts), AgentProfileDialog
 │           │   ├── dashboard/  # VibeMeter, Sentiment, MultiToken widgets
-│           │   ├── insights/   # Token insight cards
+│           │   ├── insights/   # Token insight cards, InsightsScreen
 │           │   └── wallet/     # Wallet connect button
 │           ├── models/         # Vibe data models
 │           ├── providers/      # Riverpod state providers
-│           └── services/       # API service, Web3 integration
+│           ├── services/       # API service, Web3 integration
+│           └── widgets/        # Reusable widgets (shimmer, multi-token grid, market pulse)
 ├── .github/workflows/    # CI/CD (Flutter → Vercel)
 ├── vercel.json           # SPA routing config
 └── README.md
@@ -103,6 +104,9 @@ vibeshield-ai/
 7. **Monitor Loop** — Subscription-based auto-execution with cooldown guards
 8. **Non-custodial** — All protection via on-chain vault contracts, user retains full custody
 9. **Pre-connect Landing** — Hero section explaining value before wallet connect
+10. **Pro Trader Desktop Layout** — Split-view 2-column dashboard for desktop/web (>900px)
+11. **Market Insights Panel** — Detailed sentiment analysis with TokenInsightCards + detail dialogs
+12. **Shimmer Loading** — Skeleton loading states for better UX during data fetches
 
 ## What's Implemented
 
@@ -121,6 +125,11 @@ vibeshield-ai/
 - **Animated Agent Dialog:** Pulsing glow effect on avatar, responsive layout, RPG-style stats
 - **Responsive UI:** Mobile-optimized with `ConstrainedBox(maxWidth: 800)`, scrollable dialogs
 - **Modular codebase:** `AgentProfileDialog`, `MarketPulseCard` extracted as standalone widgets
+- **Desktop Split View (>900px):**
+  - Left Column (40%): Wallet connect, token selector, Vibe Meter, Agent Card
+  - Right Column (60%): Multi-Token Sentiment Grid (3-col), Market Insights Panel, Market Pulse
+- **Multi-Token Dashboard:** 6 tokens (BTC, BNB, ETH, SOL, XRP, SUI) with shimmer skeleton loading
+- **Market Insights Panel:** TokenInsightCards with detail dialog (Vibe Score, community stats, signals)
 
 
 ---
