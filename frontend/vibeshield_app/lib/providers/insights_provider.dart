@@ -98,13 +98,14 @@ class MultiTokenNotifier extends StateNotifier<MultiTokenState> {
     try {
       final data = await _api.getMultiTokenSentiment(window: window);
       state = MultiTokenState(
+        isLoading: false,
         tokens: data['tokens'],
         source: data['source'] as String?,
         updatedAt: data['updatedAt'] as int?,
         stats: data['stats'] as Map<String, dynamic>?,
       );
     } catch (e) {
-      state = MultiTokenState(error: e.toString());
+      state = MultiTokenState(isLoading: false, error: e.toString());
     }
   }
 }

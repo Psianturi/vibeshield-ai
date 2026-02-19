@@ -9,7 +9,9 @@ import '../../providers/vibe_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/tx_history_provider.dart';
 import '../../providers/insights_provider.dart' as insights;
+import '../../providers/insight_provider.dart' as insightData;
 import '../../core/config.dart';
+import '../insights/token_insight_card.dart';
 import '../../core/agent_demo.dart';
 import '../../services/notification_service.dart';
 import '../dashboard/vibe_meter_widget.dart';
@@ -771,119 +773,100 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         constraints: const BoxConstraints(maxWidth: 1600),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: LayoutBuilder(
-            builder: (context, outerConstraints) {
-              final availableHeight = outerConstraints.maxHeight;
-              
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // --- LEFT COLUMN (ACTION CENTER - Sticky) ---
-                  Expanded(
-                    flex: 4,
-                    child: SizedBox(
-                      height: availableHeight,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Agent Demo Card (Primary Action) - Always visible at top
-                          if (walletState.isConnected &&
-                              (walletState.address?.isNotEmpty ?? false)) ...[
-                            _buildAgentDemoCard(context, walletState.address!),
-                            const SizedBox(height: 24),
-                          ],
-                          // Pre-connect landing if not connected
-                          if (!walletState.isConnected) ...[
-                            _buildPreConnectLandingCard(context),
-                            const SizedBox(height: 24),
-                          ],
-            
-                          _buildTokenSearchCard(context, vibeState, walletState),
-                          const SizedBox(height: 24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
 
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: Column(
-                                children: [
-                                  if (vibeState.error != null)
-                                    Card(
-                                      color: Colors.red.shade900,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Text(vibeState.error!),
-                                      ),
-                                    ),
-                                  if (vibeState.isLoading) ...[
-                                    const ScanningVibeMeterWidget(),
-                                  ] else if (vibeState.result != null) ...[
-                                    VibeMeterWidget(result: vibeState.result!),
-                                    const SizedBox(height: 16),
-                                    _buildAnalysisCard(vibeState.result!),
-                                    const SizedBox(height: 16),
-                                    _buildSentimentInsightsCard(),
-                                  ],
-                                  const SizedBox(height: 40),
-                                ],
-                              ),
-                            ),
+              Expanded(
+                flex: 4,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Agent Demo Card (Primary Action)
+                      if (walletState.isConnected &&
+                          (walletState.address?.isNotEmpty ?? false)) ...[
+                        _buildAgentDemoCard(context, walletState.address!),
+                        const SizedBox(height: 24),
+                      ],
+                      if (!walletState.isConnected) ...[
+                        _buildPreConnectLandingCard(context),
+                        const SizedBox(height: 24),
+                      ],
+                      _buildTokenSearchCard(context, vibeState, walletState),
+                      const SizedBox(height: 24),
+                      // Vibe Check Result
+                      if (vibeState.error != null)
+                        Card(
+                          color: Colors.red.shade900,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(vibeState.error!),
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      if (vibeState.isLoading) ...[
+                        const ScanningVibeMeterWidget(),
+                      ] else if (vibeState.result != null) ...[
+                        VibeMeterWidget(result: vibeState.result!),
+                        const SizedBox(height: 16),
+                        _buildAnalysisCard(vibeState.result!),
+                        const SizedBox(height: 16),
+                        _buildSentimentInsightsCard(),
+                      ],
+                      const SizedBox(height: 80),
+                    ],
                   ),
+                ),
+              ),
 
               // --- DIVIDER ---
-                  Container(
-                    width: 1,
-                    height: availableHeight,
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          scheme.outline.withValues(alpha: 0.3),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
+              Container(
+                width: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      scheme.outline.withValues(alpha: 0.3),
+                      Colors.transparent,
+                    ],
                   ),
+                ),
+              ),
 
-                  // --- RIGHT COLUMN (DATA HUB) ---
-                  Expanded(
-                    flex: 6,
-                    child: SizedBox(
-                      height: availableHeight,
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            // Market Pulse Ticker
-                            MarketPulseCard(),
-                            const SizedBox(height: 32),
-                            // Multi-Token Sentiment Dashboard (Grid)
-                            _buildMultiTokenDashboardCard(),
-                            const SizedBox(height: 32),
-                            // Market Intel
-                            if (walletState.isConnected) ...[
-                              const MarketIntelCard(),
-                              const SizedBox(height: 32),
-                              // Transaction History
-                              _buildTxHistoryCard(context, walletState.address!),
-                              const SizedBox(height: 32),
-                            ],
-                            // Footer
-                            _buildFooter(context),
-                            const SizedBox(height: 48),
-                          ],
-                        ),
-                      ),
-                    ),
+              // --- RIGHT COLUMN (DATA HUB) ---
+              Expanded(
+                flex: 6,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Market Pulse Ticker
+                      MarketPulseCard(),
+                      const SizedBox(height: 32),
+                      // Multi-Token Sentiment Dashboard (Grid)
+                      _buildMultiTokenDashboardCard(),
+                      const SizedBox(height: 32),
+                      // Market Insights Panel (Desktop only)
+                      _buildInsightsPanelCard(),
+                      const SizedBox(height: 32),
+                      // Market Intel
+                      if (walletState.isConnected) ...[
+                        const MarketIntelCard(),
+                        const SizedBox(height: 32),
+                        // Transaction History
+                        _buildTxHistoryCard(context, walletState.address!),
+                        const SizedBox(height: 32),
+                      ],
+                      // Footer
+                      _buildFooter(context),
+                      const SizedBox(height: 48),
+                    ],
                   ),
-                ],
-              );
-            },
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2634,6 +2617,179 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Keep Insights in sync with card-tap checks.
         ref.read(insights.insightsProvider.notifier).fetchInsights(token);
       },
+    );
+  }
+
+  // Market Insights Panel (Desktop - shows detailed token insights)
+  Widget _buildInsightsPanelCard() {
+    final insightsAsync = ref.watch(insightData.multiTokenInsightsProvider('Daily'));
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '🔍 Market Insights',
+                    style: theme.textTheme.titleLarge,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: () {
+                    ref.invalidate(insightData.multiTokenInsightsProvider('Daily'));
+                  },
+                  tooltip: 'Refresh',
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Detailed sentiment analysis from Cryptoracle',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            insightsAsync.when(
+              data: (insightsMap) {
+                if (insightsMap.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: Text(
+                        'No insights available',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                // Show top 3 tokens (BTC, BNB, ETH)
+                final priority = ['BTC', 'BNB', 'ETH'];
+                final sortedKeys = insightsMap.keys.toList()
+                  ..sort((a, b) {
+                    final aIndex = priority.indexOf(a);
+                    final bIndex = priority.indexOf(b);
+                    if (aIndex != -1 && bIndex != -1) return aIndex.compareTo(bIndex);
+                    if (aIndex != -1) return -1;
+                    if (bIndex != -1) return 1;
+                    return a.compareTo(b);
+                  });
+
+                // Take top 4 for desktop view
+                final displayTokens = sortedKeys.take(4).toList();
+
+                return Column(
+                  children: displayTokens.map((token) {
+                    final insight = insightsMap[token]!;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: TokenInsightCard(
+                        insight: insight,
+                        onTap: () => _showInsightDetailDialog(insight),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (error, _) => Padding(
+                padding: const EdgeInsets.all(20),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.error_outline, color: scheme.error),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Failed to load insights',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.error,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getCoinGeckoIdForToken(String token) {
+    const mapping = {
+      'BTC': 'bitcoin',
+      'BNB': 'binancecoin',
+      'ETH': 'ethereum',
+      'SOL': 'solana',
+      'XRP': 'ripple',
+      'DOGE': 'dogecoin',
+      'SUI': 'sui',
+      'USDT': 'tether',
+    };
+    return mapping[token.toUpperCase()] ?? token.toLowerCase();
+  }
+
+  void _showInsightDetailDialog(dynamic insight) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${insight.token} Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildInsightDetailRow('Vibe Score', '${insight.vibeScore.toStringAsFixed(1)}/100'),
+              _buildInsightDetailRow('Positive', '${(insight.sentiment.positive * 100).toStringAsFixed(1)}%'),
+              _buildInsightDetailRow('Negative', '${(insight.sentiment.negative * 100).toStringAsFixed(1)}%'),
+              const Divider(),
+              _buildInsightDetailRow('Messages', insight.community.totalMessages.toString()),
+              _buildInsightDetailRow('Interactions', insight.community.interactions.toString()),
+              _buildInsightDetailRow('Unique Users', insight.community.uniqueUsers.toString()),
+              _buildInsightDetailRow('Communities', insight.community.activeCommunities.toString()),
+              const Divider(),
+              _buildInsightDetailRow('Momentum', '${(insight.signals.momentum * 100).toStringAsFixed(2)}%'),
+              _buildInsightDetailRow('Breakout', '${(insight.signals.breakout * 100).toStringAsFixed(2)}%'),
+              _buildInsightDetailRow('Deviation', '${(insight.signals.deviation * 100).toStringAsFixed(2)}%'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsightDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey.shade400)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
