@@ -586,7 +586,7 @@ router.post('/multi', cryptoracleLimiter, async (req, res) => {
 
     const tokenList = (tokens && Array.isArray(tokens) && tokens.length)
       ? normalizeSymbolList(tokens)
-      : ['BTC', 'BNB', 'ETH', 'SOL', 'XRP', 'DOGE', 'SUI', 'USDT'];
+      : ['BTC', 'BNB', 'ETH', 'SOL', 'XRP', 'DOGE', 'SUI']; // USDT excluded - stablecoin has no sentiment
 
     console.log(`[API] /multi request: ${tokenList.length} tokens`);
     const requestStartTime = Date.now();
